@@ -3,13 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PoolLog Admin — Readings & Reports</title>
+<title>Weir Admin — Readings & Reports</title>
 <link rel="manifest" href="./manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <meta name="theme-color" content="#114B4F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
+/* A text cursor belongs in a field you type into and nowhere else. This is the
+   whole-page rule: everything is unselectable by default, and real fields turn
+   it back on. Anything new inherits it without having to remember. */
+*{
+  -webkit-user-select:none;
+  -moz-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+input, textarea, select, [contenteditable], [contenteditable] *{
+  -webkit-user-select:text;
+  -moz-user-select:text;
+  user-select:text;
+}
+
+
 :root{
   --ink:#0F2E2E;
   --surface:#EDF3F2;
@@ -370,9 +386,10 @@ textarea{min-height:52px;resize:vertical;}
   box-shadow:0 4px 12px rgba(15,46,46,0.06);
 }
 .step-bar{
-  /* Clear of the tab bar with room to spare — a thumb on the step button used
-     to land within a few pixels of the tabs underneath. */
-  position:fixed;bottom:calc(74px + env(safe-area-inset-bottom));
+  /* Sits directly on top of the tab bar, with no strip of page showing between
+     them. The height is measured from the tab bar itself rather than guessed,
+     since it differs with text size and with the phone's own bottom inset. */
+  position:fixed;bottom:var(--bottombar-height, 60px);
   left:0;right:0;z-index:40;
   max-width:720px;margin:0 auto;
   background:#fff;border-top:1px solid var(--line);
@@ -383,7 +400,7 @@ textarea{min-height:52px;resize:vertical;}
 }
 .step-bar #stepBarNext{padding:14px 18px;font-size:15.5px;}
 .step-bar #btnPushToTalk{width:62px !important;flex:0 0 62px !important;padding:0 !important;}
-body.has-step-bar{padding-bottom:calc(168px + env(safe-area-inset-bottom));}
+body.has-step-bar{padding-bottom:calc(var(--bottombar-height, 60px) + 108px);}
 .step-back{
   flex-shrink:0;background:none;border:1px solid var(--line);
   color:var(--teal-deep);border-radius:9px;
@@ -405,7 +422,11 @@ body.has-step-bar{padding-bottom:calc(168px + env(safe-area-inset-bottom));}
 
 select#customerSelect{font-weight:600;}
 .toast{
-  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  /* Clear of both bars: the tabs, and the step button above them. Both are
+     measured, so this holds whatever the text size or the phone's inset. */
+  position:fixed;
+  bottom:calc(var(--bottombar-height, 60px) + var(--stepbar-height, 0px) + 14px);
+  left:50%;transform:translateX(-50%);
   background:var(--teal-deep);color:#fff;padding:10px 20px;border-radius:20px;
   font-size:13px;font-weight:600;opacity:0;transition:opacity .25s;pointer-events:none;
   z-index:50;
@@ -438,7 +459,7 @@ select#customerSelect{font-weight:600;}
 <body>
 <div id="loginScreen" style="display:none;position:fixed;inset:0;z-index:200;background:linear-gradient(168deg,#16585C 0%,#114B4F 55%,#0D3E42 100%);align-items:center;justify-content:center;padding:24px;">
   <div style="background:#fff;border-radius:16px;padding:26px 22px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.28);">
-    <h2 style="font-size:20px;margin:0 0 4px;">PoolLog Admin</h2>
+    <h2 style="font-size:20px;margin:0 0 4px;">Weir Admin</h2>
     <p style="font-size:12.5px;color:#5E7371;margin:0 0 18px;">Sign in with an admin account.</p>
     <div class="field"><label>Username</label><input id="loginUsername" autocomplete="username" placeholder="sam.rivera"></div>
     <div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Your password"></div>
@@ -457,7 +478,7 @@ select#customerSelect{font-weight:600;}
       </svg>
     </div>
     <div>
-      <h1>PoolLog Admin</h1>
+      <h1>Weir Admin</h1>
       <p>Chemical readings & reports</p>
     </div>
   </div>
@@ -561,7 +582,7 @@ select#customerSelect{font-weight:600;}
     <!-- POOL SECTION -->
     <div class="card" id="visitClipSection" style="display:none;">
       <h2>Send a clip</h2>
-      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Up to 15 seconds, with sound, for something a photo cannot explain &mdash; a pump making a noise, water tracking to a leak. It goes straight to your phone&rsquo;s share sheet, so you can text or email it to the office. Nothing is saved in PoolLog.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Up to 15 seconds, with sound, for something a photo cannot explain &mdash; a pump making a noise, water tracking to a leak. It goes straight to your phone&rsquo;s share sheet, so you can text or email it to the office. Nothing is saved in Weir.</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="btnRecordClip" type="button" style="width:auto;">Record a clip</button>
       </div>
@@ -754,9 +775,6 @@ select#customerSelect{font-weight:600;}
       <div class="field">
         <label>Gate photo for this technician</label>
         <p style="font-size:11.5px;color:var(--muted);margin:0 0 8px;">Before and after photo requirements are set per body of water on Readings and Dosages, not here. Leaving this off means the technician follows whatever Settings says.</p>
-        <label style="display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px;cursor:pointer;">
-          <input type="checkbox" id="tcRequireGate" style="margin:0;"> Require gate photo
-        </label>
         <p id="tcPhotoRequireNote" style="display:none;font-size:11.5px;color:var(--rust);margin:8px 0 0;"></p>
       </div>
 
@@ -841,15 +859,13 @@ select#customerSelect{font-weight:600;}
       </div>
       <div class="field">
         <label>Service day</label>
-        <select id="ncDay">
-          <option value="Sunday">Sunday</option>
-          <option value="Monday" selected>Monday</option>
-          <option value="Tuesday">Tuesday</option>
-          <option value="Wednesday">Wednesday</option>
-          <option value="Thursday">Thursday</option>
-          <option value="Friday">Friday</option>
-          <option value="Saturday">Saturday</option>
-        </select>
+        <!-- Buttons rather than a dropdown: on a phone a native dropdown gets
+             dismissed by anything that shifts the page underneath it — the
+             keyboard closing, a bar resizing — which made picking a day a
+             fight. The value still lives in a field called ncDay, so
+             everything that reads or sets it is unchanged. -->
+        <input type="hidden" id="ncDay" value="Monday">
+        <div id="ncDayButtons" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
       </div>
       <div class="field">
         <label>Assigned technician</label>
@@ -959,10 +975,6 @@ select#customerSelect{font-weight:600;}
 
   <!-- OPTIONS VIEW -->
   <div class="view" id="view-options">
-    <div class="card" style="padding:14px 18px;">
-      <h2 style="margin-bottom:0;">Settings</h2>
-    </div>
-
       <!-- Water balance (LSI) is hidden until calcium hardness and water temperature
      are part of the readings. The calculator and the readout are still in the
      app; only this switch is out of sight, so nothing is lost by restoring it. -->
@@ -990,6 +1002,15 @@ select#customerSelect{font-weight:600;}
       </div>
 
 
+
+    <div class="card" id="syncCard">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <h2 style="margin:0;">Office sync</h2>
+        <button class="btn btn-ghost" id="btnSyncNow" style="width:auto;margin-left:auto;flex:0 0 auto;">Sync now</button>
+      </div>
+      <p id="fieldSyncStatus" style="font-size:12.5px;color:var(--muted);margin:10px 0 0;">Checking&hellip;</p>
+      <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0;">Everything is saved on this phone first and works with no signal. It goes to the office whenever there is a connection.</p>
+    </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div style="display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;">
@@ -1000,49 +1021,7 @@ select#customerSelect{font-weight:600;}
       </div>
     </div>
 
-    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin:24px 0 10px;">Photos</div>
-
-<div class="card">
-      <div class="field">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
-          <h2 style="margin:0;">Before photos</h2>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingBeforePhotos" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0;">When on, each visit starts with a Before photos step so you can capture the pool before any work is done. Turning this off removes that step entirely. To make a before photo compulsory, tick Required next to that body of water on Readings and Dosages.</p>
-        
-      </div>
-    </div>
-    <div class="card">
-      <div class="field">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
-          <h2 style="margin:0;">After photos</h2>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingAfterPhotos" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0;">When on, each visit ends with an After photos step so you can capture the pool once the work is done. Turning this off removes that step entirely. To make an after photo compulsory, tick Required next to that body of water on Readings and Dosages.</p>
-        
-      </div>
-    </div>
-    <div class="card">
-      <div class="field">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
-          <h2 style="margin:0;">Gate photo</h2>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingGatePhoto">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0;">When on, technicians can photograph the closed or locked gate on the last body of water they service. Proof the property was left secure. To make it compulsory, tick Required on the Pool tab of Readings and Dosages &mdash; the gate belongs to the property, so there is no separate tick on Spa or Extra.</p>
-        
-      </div>
-    </div>
-
-    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin:24px 0 10px;">Field app</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin:24px 0 10px;">Field app</div>
 
 
     <input type="checkbox" id="settingVoiceMode" style="display:none;">
@@ -1064,30 +1043,6 @@ select#customerSelect{font-weight:600;}
       </div>
     </div>
     
-    <div class="card">
-      <div class="field">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
-          <h2 style="margin:0;">Require a reason for skipped services</h2>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingRequireSkipReason">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0;">When on, skipping a service opens a screen where the technician must explain why, with the option to attach a photo.</p>
-      </div>
-    </div>
-    <div class="card">
-      <div class="field">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
-          <h2 style="margin:0;">Allow technicians to rearrange routes</h2>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingRouteReorder" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0;">When on, technicians can drag customers into a different order on their Today list. Turning this off locks the route order for everyone.</p>
-      </div>
-    </div>
     <div class="card">
       <div class="field">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
@@ -1141,6 +1096,15 @@ select#customerSelect{font-weight:600;}
 <div id="offlineBadge" style="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:400;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;box-shadow:0 3px 12px rgba(0,0,0,0.18);display:none;pointer-events:none;"></div>
 
 <script>
+// ================== WHICH SERVER THIS COPY TALKS TO ==================
+// The only two lines that change between one company's copy and another's.
+// Both come from Supabase: Project Settings > API. The key is the publishable
+// one, safe to have in a file anyone can read; it grants nothing on its own.
+// The beta server. Testers' data is kept apart from the working company's.
+const WEIR_SERVER_URL = 'https://mjjgvpejbibybhsmrdno.supabase.co';
+const WEIR_SERVER_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qamd2cGVqYmlieWJoc21yZG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTIyNzgsImV4cCI6MjEwNTY2ODI3OH0.fC627DhuydW81Bie_abdlWTZ-FykNHZUMVd9RrFJSJg';
+// =====================================================================
+
 
 // ---------- Error reporting ----------
 // A tester who says "it froze" gives you nothing to work with. This catches
@@ -1148,7 +1112,7 @@ select#customerSelect{font-weight:600;}
 // with a button to copy the details. Kept deliberately dependency-free and
 // early in the file, so it works even if the rest of the script dies.
 const APP_VERSION = 'admin-2026-09-11';
-const ERROR_LOG_KEY = 'poollog:errorLog';
+const ERROR_LOG_KEY = 'weir:errorLog';
 const ERROR_LOG_MAX = 20;
 
 function recordError(kind, message, source, line, col, stack){
@@ -1178,7 +1142,7 @@ function recordError(kind, message, source, line, col, stack){
 }
 
 function errorText(entry){
-  return 'PoolLog problem report\n'
+  return 'Weir problem report\n'
     + '----------------------\n'
     + 'When:    ' + entry.when + '\n'
     + 'Version: ' + entry.version + '\n'
@@ -1294,7 +1258,30 @@ function reportStorageFailure(where, err){
   showErrorBanner(entry);
 }
 
-const STORAGE_PREFIX = 'poollog:';
+// ---------- The move from PoolLog to Weir ----------
+// Every device files its data under names that used to start "poollog". They
+// are copied across to "weir" once, the first time this runs, and the old ones
+// are left where they are: if anything goes wrong, nothing has been lost.
+function weirRenameStoredKeys(){
+  try{
+    if(localStorage.getItem('weir:__renamed')) return;
+    const old = [];
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf('poollog') === 0) old.push(k);
+    }
+    old.forEach(k=>{
+      const moved = 'weir' + k.slice('poollog'.length);
+      if(localStorage.getItem(moved) === null){
+        try{ localStorage.setItem(moved, localStorage.getItem(k)); }catch(e){}
+      }
+    });
+    localStorage.setItem('weir:__renamed', new Date().toISOString());
+  }catch(e){}
+}
+weirRenameStoredKeys();
+
+const STORAGE_PREFIX = 'weir:';
 
 // ---------- Leading zero on decimals ----------
 // Typing ".5" is quicker than "0.5", so accept it and tidy it up. One
@@ -1502,6 +1489,18 @@ function loadChemConfig(){
         if(!Array.isArray(item.buttons)){
           item.buttons = (DEFAULT_BUTTON_SETS[item.key] || []).slice();
           migrated = true;
+        }
+        // A setup saved before Free chlorine gained its 2 keeps the old six.
+        // Put the missing one back, but only where nobody has rearranged them.
+        if(item.key === 'chlorine' && Array.isArray(item.buttons)){
+          const values = item.buttons.map(b => Number(btnValue(b)));
+          const old = [0, 1, 3, 5, 7.5, 10];
+          if(values.length === old.length && old.every((v, i) => values[i] === v)){
+            const like = item.buttons[1];
+            const two = (like && typeof like === 'object') ? {v: 2, c: like.c} : 2;
+            item.buttons = item.buttons.slice(0, 2).concat([two], item.buttons.slice(2));
+            migrated = true;
+          }
         }
       });
     });
@@ -1846,8 +1845,17 @@ function renderCustomPhotoBlocks(type, when){
 
 // Any user-defined photo still owing for this section
 function missingCustomPhoto(type, when){
-  const wanted = customPhotosFor(type).filter(p =>
-    p.required === true && (p.when === 'before' ? 'before' : 'after') === when);
+  const wanted = customPhotosFor(type).filter(p =>{
+    if(p.required !== true) return false;
+    // "When" can be either or both now
+    const at = p.when && typeof p.when === 'object'
+      ? !!p.when[when]
+      : (p.when === 'before' ? 'before' : 'after') === when;
+    if(!at) return false;
+    // Asked of this technician by name on the website, for this body of water.
+    // Nobody ticked means nobody is asked.
+    return techWantsPhoto(p.id, type);
+  });
   const missing = wanted.find(p => !customPhotoData[p.id]);
   return missing ? missing.label : '';
 }
@@ -2100,7 +2108,27 @@ function statusOf(chem, value){
   return 'ideal';
 }
 
+// How tall the tab bar actually is, so the step bar can sit right on it
+function measureBottomBar(){
+  const bar = document.querySelector('.bottombar');
+  if(bar){
+    const h = Math.round(bar.getBoundingClientRect().height);
+    if(h > 0) document.documentElement.style.setProperty('--bottombar-height', h + 'px');
+  }
+  // The step button sits on the tab bar; a message has to clear both, and the
+  // step bar is not always there
+  const step = document.getElementById('stepBar');
+  const showing = step && step.style.display !== 'none' && step.offsetParent !== null;
+  const sh = showing ? Math.round(step.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--stepbar-height', sh + 'px');
+}
+window.addEventListener('load', measureBottomBar);
+window.addEventListener('resize', measureBottomBar);
+window.addEventListener('orientationchange', ()=> setTimeout(measureBottomBar, 200));
+document.addEventListener('DOMContentLoaded', ()=> setTimeout(measureBottomBar, 0));
+
 function showToast(msg){
+  try{ measureBottomBar(); }catch(e){}
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
@@ -2215,6 +2243,12 @@ document.addEventListener('visibilitychange', ()=>{
   if(!document.hidden) refreshFromStorage();
 });
 
+// Shuts any customer briefing open on the route
+function closeRouteBriefs(){
+  document.querySelectorAll('.route-brief').forEach(p => p.remove());
+  document.querySelectorAll('.chev').forEach(x => { x.textContent = '\u203A'; });
+}
+
 function switchView(view, opts){
   opts = opts || {};
 
@@ -2253,7 +2287,13 @@ function switchView(view, opts){
   }
   if(view === 'report' && !opts.skipRefresh) refreshReportSelectors();
   if(view === 'options') renderOfflineStatus();
-  if(view === 'options')  if(view === 'home') renderHomeList();
+  if(view === 'options')  if(view === 'home'){
+    // Coming back to Today starts clean: a briefing left open on a customer
+    // is closed. The route itself is only redrawn when something changed, so
+    // the panel has to be closed here rather than waiting for a redraw.
+    closeRouteBriefs();
+    renderHomeList();
+  }
   if(view === 'report'){
     // The tab always opens on Serviced today. Arriving from a customer row or
     // a technician's route goes straight to the report itself, so those pass
@@ -2279,8 +2319,32 @@ setTimeout(async ()=>{
 }, 4000);
 
 
-document.querySelectorAll('.tab').forEach(t=>{
-  t.addEventListener('click', ()=>{
+
+// Is there a report with actual work in it, waiting to be finished? Used to
+// decide whether tapping Today should resume it rather than show the route.
+function reportInProgress(){
+  if(!viewingToday()) return false;
+  if(!visitDraft || !visitDraft.customerId) return false;
+  const cust = customers.find(x => x.id === visitDraft.customerId);
+  if(!cust) return false;
+
+  // A body of water already submitted counts
+  if(pendingVisit && pendingVisit.customerId === visitDraft.customerId
+     && Object.keys(pendingVisit.doneSections || {}).length > 0) return true;
+
+  // So does anything typed but not yet submitted
+  const vals = visitDraft.values || {};
+  return Object.keys(vals).some(k => vals[k] !== '' && vals[k] !== undefined);
+}
+
+// Listened for on the document rather than attached to each tab. The nav is
+// re-rendered in places — hiding the Technicians tab, for one — and anything
+// bound to the old elements is lost when they are replaced. That is why
+// tapping Today from another tab silently did nothing.
+document.addEventListener('click', (ev)=>{
+  const t = ev.target && ev.target.closest ? ev.target.closest('.tab') : null;
+  if(!t || !t.dataset || !t.dataset.view) return;
+  (()=>{
     // Ignore a tab tapped right after the step button — the two sit close
     // together and that is a mis-tap, not a decision
     if(Date.now() - stepBarPressedAt < 500) return;
@@ -2289,13 +2353,25 @@ document.querySelectorAll('.tab').forEach(t=>{
     // straight into a customer's report.
     if(t.dataset.view === currentViewName) return;
 
-    // Today always means the route. It used to reopen a visit that had work in
-    // it, which meant tapping Today from another tab dropped you straight back
-    // inside a report you were trying to leave. The draft is still kept, so
-    // tapping that customer picks up exactly where they left off.
+    // Tapping Today with a report already under way goes back into that report
+    // rather than the route. Leaving mid-report to check something else and
+    // then having to find the customer again was the common complaint.
+    //
+    // It only ever happens on a deliberate tap of the Today tab — never on the
+    // device Back button, which is how this used to drop people into a report
+    // they were trying to leave.
+    // Wrapped, because a fault in this check must never stop a tab working.
+    // Being unable to leave a page is far worse than not resuming a report.
+    try{
+      if(t.dataset.view === 'home' && !navigatingBack && reportInProgress()){
+        openVisit(visitDraft.customerId);
+        return;
+      }
+    }catch(e){ /* fall through to the normal tab change */ }
+
     switchView(t.dataset.view);
-  });
-});
+  })();
+}, true);
 
 
 function lsGet(key){
@@ -2361,6 +2437,12 @@ function makeRoomForSave(){
 function lsSet(key, value){
   try{
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+    // Never let telling sync about a change get in the way of the save itself
+    if(key === 'customers' || key === 'tasks' || key === 'rescheduledVisits'
+     || key.indexOf('readings:') === 0 || key.indexOf('spaReadings:') === 0
+     || key.indexOf('fountainReadings:') === 0 || key.indexOf('skippedVisits:') === 0){
+      try{ if(typeof fieldNoteLocalChange === 'function') fieldNoteLocalChange(); }catch(e){}
+    }
     return true;
   }catch(e){
     const full = e && (e.name === 'QuotaExceededError'
@@ -2408,29 +2490,1772 @@ function lsSet(key, value){
   }
 }
 
-// ---------- Beta tester accounts ----------
-// There is no server yet, so accounts cannot be pushed to anyone's device.
-// Instead each beta build carries the accounts for the people testing it: the
-// first time the app opens on a device with no technicians set up, these are
-// created. After that the device's own list wins and this is ignored, so a
-// tester who renames themselves or adds staff keeps those changes.
+// ---------- Signing in (field apps) ----------
+// Technicians sign in with a username and password against the server. A phone
+// learns its company once — from the owner's setup link or the company code —
+// and remembers the company itself, so a later code change never locks it out.
 //
-// To add or change a tester: edit this list, commit, and tell them to reload.
-// Remove the whole block before any real launch — passwords in a public file
-// are fine for four known testers and nothing beyond that.
-const BETA_ACCOUNTS = [
-  {id: 'beta_owner', name: 'Owner', username: 'poollog', password: 'letmein', requireAfterPhoto: true}
-];
+// The first sign-in for a technician on a phone needs signal. After that the
+// phone can sign them in with no signal at all: it keeps a scrambled copy of
+// their password (PBKDF2, never the password itself) and checks against that.
+// Whenever there is signal the account is checked again, and a reset, removed
+// or demoted account is signed out and its scrambled copy thrown away.
+//
+// The phone's company and sign-in live under their own prefix, apart from the
+// company's data, so they are never copied into a backup.
+// Shared word for word by index.html, technician-app.html and admin-readings-app.html.
+const FIELD_SUPABASE_URL = WEIR_SERVER_URL;
+const FIELD_SUPABASE_KEY = WEIR_SERVER_KEY;
+const DEVICE_PREFIX = 'weirdevice:';
 
-(function seedBetaAccounts(){
+function deviceGet(key){
+  try{ return JSON.parse(localStorage.getItem(DEVICE_PREFIX + key)); }catch(e){ return null; }
+}
+function deviceSet(key, value){
   try{
-    if(!Array.isArray(BETA_ACCOUNTS) || !BETA_ACCOUNTS.length) return;
-    const existing = lsGet('technicians');
-    // Only ever on a fresh device. Never overwrite a real list.
-    if(Array.isArray(existing) && existing.length) return;
-    lsSet('technicians', BETA_ACCOUNTS.map(a => Object.assign({}, a)));
+    if(value === null || value === undefined) localStorage.removeItem(DEVICE_PREFIX + key);
+    else localStorage.setItem(DEVICE_PREFIX + key, JSON.stringify(value));
+    return true;
+  }catch(e){ return false; }
+}
+
+async function fieldFetch(path, opts, withSession){
+  const o = opts || {};
+  const headers = {'apikey': FIELD_SUPABASE_KEY, 'Content-Type': 'application/json'};
+  const s = deviceGet('session');
+  if(withSession !== false && s && s.access_token) headers['Authorization'] = 'Bearer ' + s.access_token;
+  let res;
+  try{
+    res = await fetch(FIELD_SUPABASE_URL + path, Object.assign({}, o, {headers}));
+  }catch(e){
+    return {ok: false, status: 0, body: null, offline: true};
+  }
+  let body = null;
+  try{ body = await res.json(); }catch(e){}
+  return {ok: res.ok, status: res.status, body};
+}
+
+// ---- Signing in with no signal ----
+// Kept per technician, so a shared phone works for whoever has signed in on it
+// before. Nothing here lets anyone reach the server; it only unlocks this phone.
+const FIELD_PBKDF2_ROUNDS = 150000;
+const FIELD_SAVED_LOGINS = 8;
+
+function fieldCrypto(){
+  return (typeof crypto !== 'undefined' && crypto.subtle) ? crypto : null;
+}
+
+function fieldBytesToHex(buf){
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function fieldScramble(password, saltHex){
+  const c = fieldCrypto();
+  if(!c) return null;
+  const enc = new TextEncoder();
+  const salt = new Uint8Array((saltHex.match(/../g) || []).map(h => parseInt(h, 16)));
+  const key = await c.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await c.subtle.deriveBits(
+    {name: 'PBKDF2', salt: salt, iterations: FIELD_PBKDF2_ROUNDS, hash: 'SHA-256'}, key, 256);
+  return fieldBytesToHex(bits);
+}
+
+function fieldSavedLogins(){
+  const list = deviceGet('logins');
+  return Array.isArray(list) ? list : [];
+}
+
+// Remember this technician on this phone, so they can sign in again with no signal
+async function fieldRememberLogin(company, username, password, membership, refreshToken){
+  const c = fieldCrypto();
+  if(!c) return;
+  const salt = fieldBytesToHex(c.getRandomValues(new Uint8Array(16)));
+  const scrambled = await fieldScramble(password, salt);
+  if(!scrambled) return;
+  const keep = fieldSavedLogins().filter(l => !(l.companyId === company.id
+    && String(l.username).toLowerCase() === String(username).trim().toLowerCase()));
+  keep.unshift({companyId: company.id, username: String(username).trim(), salt: salt,
+                scrambled: scrambled, rounds: FIELD_PBKDF2_ROUNDS, membership: membership,
+                refresh: refreshToken || null, savedAt: new Date().toISOString()});
+  deviceSet('logins', keep.slice(0, FIELD_SAVED_LOGINS));
+}
+
+// Signing in offline reuses the way back to the server this phone was given
+// last time it signed in with signal. It is swapped for a fresh one every time
+// the phone reconnects, and thrown away the moment the server says no.
+function fieldRememberRefresh(refreshToken){
+  const m = deviceGet('membership');
+  const company = deviceGet('company');
+  if(!m || !company || !refreshToken) return;
+  const list = fieldSavedLogins();
+  let touched = false;
+  list.forEach(l=>{
+    if(l.companyId === company.id && String(l.username).toLowerCase() === String(m.username || '').toLowerCase()){
+      l.refresh = refreshToken;
+      touched = true;
+    }
+  });
+  if(touched) deviceSet('logins', list);
+}
+
+function fieldForgetLogin(companyId, username){
+  deviceSet('logins', fieldSavedLogins().filter(l => !(l.companyId === companyId
+    && String(l.username).toLowerCase() === String(username || '').trim().toLowerCase())));
+}
+
+// Same-length comparison, so how much matches cannot be measured
+function fieldSameSecret(a, b){
+  if(typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for(let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function fieldSignInOffline(company, username, password, needAdmin){
+  const saved = fieldSavedLogins().find(l => l.companyId === company.id
+    && String(l.username).toLowerCase() === String(username).trim().toLowerCase());
+  if(!saved) return {ok: false, message: 'You need a connection the first time you sign in on this phone.'};
+  const scrambled = await fieldScramble(password, saved.salt);
+  if(!scrambled || !fieldSameSecret(scrambled, saved.scrambled)) return {ok: false, message: FIELD_NO_MATCH};
+  const m = saved.membership;
+  if(needAdmin && !(m && m.full_access)){
+    return {ok: false, message: 'This app is for admins. Use the Weir technician app instead.'};
+  }
+  // No access token until there is signal: the first call once the phone is
+  // back online swaps this for a fresh session, or signs them out if the
+  // account has been reset or removed
+  deviceSet('membership', m);
+  deviceSet('session', {access_token: null, refresh_token: saved.refresh || null, offline: true});
+  return {ok: true, membership: m, offline: true};
+}
+
+function fieldStoreSession(body){
+  if(!body || !body.access_token) return false;
+  deviceSet('session', {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    user_id: body.user && body.user.id
+  });
+  fieldRememberRefresh(body.refresh_token);
+  return true;
+}
+
+// true when refreshed, 'offline' without signal, 'revoked' when the server
+// refuses — the password was reset or the account is gone
+async function fieldRefresh(){
+  const s = deviceGet('session');
+  if(!s || !s.refresh_token) return 'revoked';
+  const res = await fieldFetch('/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST', body: JSON.stringify({refresh_token: s.refresh_token})
+  }, false);
+  if(res.offline) return 'offline';
+  if(res.ok && fieldStoreSession(res.body)) return true;
+  return 'revoked';
+}
+
+async function fieldAuthed(path, opts){
+  const s = deviceGet('session');
+  if(s && !s.access_token && s.refresh_token){
+    const first = await fieldRefresh();
+    if(first === 'offline') return {ok: false, status: 0, body: null, offline: true};
+    if(first !== true) return {ok: false, status: 401, body: null, revoked: true};
+  }
+  let res = await fieldFetch(path, opts);
+  if(res.status === 401){
+    const r = await fieldRefresh();
+    if(r === true) res = await fieldFetch(path, opts);
+    else if(r === 'offline') res = {ok: false, status: 0, body: null, offline: true};
+    else res.revoked = true;
+  }
+  return res;
+}
+
+async function fieldLookupCompany(code){
+  const res = await fieldFetch('/rest/v1/rpc/company_for_code', {
+    method: 'POST', body: JSON.stringify({p_code: String(code || '').trim()})
+  }, false);
+  if(res.offline) return {ok: false, message: 'You need a connection to set up this phone.'};
+  if(!res.ok || !res.body || !res.body.id) return {ok: false, message: "That company code wasn't found. Check it with your office."};
+  return {ok: true, company: {id: res.body.id, name: res.body.name}};
+}
+
+const FIELD_NO_MATCH = "That username and password don't match.";
+
+async function fieldSignIn(username, password, needAdmin){
+  const company = deviceGet('company');
+  if(!company || !company.id) return {ok: false, message: 'Set up this phone with your company code first.'};
+  const u = String(username || '').trim();
+  if(!u || !password) return {ok: false, message: 'Enter your username and password.'};
+
+  const addr = await fieldFetch('/rest/v1/rpc/sign_in_address', {
+    method: 'POST', body: JSON.stringify({p_company_id: company.id, p_username: u})
+  }, false);
+  if(addr.offline) return fieldSignInOffline(company, u, password, needAdmin);
+  if(!addr.ok || typeof addr.body !== 'string' || !addr.body) return {ok: false, message: FIELD_NO_MATCH};
+
+  const tok = await fieldFetch('/auth/v1/token?grant_type=password', {
+    method: 'POST', body: JSON.stringify({email: addr.body, password: password})
+  }, false);
+  if(tok.offline) return fieldSignInOffline(company, u, password, needAdmin);
+  if(!tok.ok || !fieldStoreSession(tok.body)) return {ok: false, message: FIELD_NO_MATCH};
+
+  const mem = await fieldAuthed('/rest/v1/rpc/my_membership', {method: 'POST', body: '{}'});
+  const m = mem.ok ? mem.body : null;
+  let refusal = null;
+  if(!m || !m.technician_id || m.company_id !== company.id) refusal = "This account can't sign in here. Check with your office.";
+  else if(m.removed) refusal = 'This sign-in has been removed. Check with your office.';
+  else if(needAdmin && !m.full_access) refusal = 'This app is for admins. Use the Weir technician app instead.';
+  if(refusal){
+    await fieldSignOut();
+    fieldForgetLogin(company.id, u);
+    return {ok: false, message: refusal};
+  }
+  deviceSet('membership', m);
+  // Remembered under the username actually signed in with, so it still works
+  // with no signal next time
+  await fieldRememberLogin(company, m.username || u, password, m, tok.body && tok.body.refresh_token);
+  return {ok: true, membership: m};
+}
+
+async function fieldSignOut(){
+  const s = deviceGet('session');
+  if(s && s.access_token){
+    try{ await fieldFetch('/auth/v1/logout', {method: 'POST'}); }catch(e){}
+  }
+  deviceSet('session', null);
+  deviceSet('membership', null);
+}
+
+// The signed-in technician, as the app uses it: their profile on this phone if
+// there is one, with the server deciding their name, username and admin access
+function fieldCurrentUser(){
+  const s = deviceGet('session');
+  const m = deviceGet('membership');
+  // Signed in offline counts: there is no access token until there is signal
+  const signedIn = s && (s.access_token || s.refresh_token || s.offline);
+  if(!signedIn || !m || !m.technician_id || m.removed) return null;
+  // Through the page's own storage helper, like every other read of profiles
+  let techs = [];
+  try{ techs = lsGet('technicians') || []; }catch(e){}
+  const local = techs.find(t => t && t.id === m.technician_id) || {};
+  const user = Object.assign({}, local, {
+    id: m.technician_id,
+    name: m.name || local.name || m.username,
+    username: m.username,
+    isAdmin: !!m.full_access
+  });
+  delete user.password;
+  return user;
+}
+
+// Re-check the account whenever there is signal. Calls onGone(reason) when the
+// phone must sign out: 'removed', 'signed-out' (password reset or account
+// deleted) or 'not-admin'.
+async function fieldCheckAccount(needAdmin, onGone){
+  if(!deviceGet('session')) return;
+  const res = await fieldAuthed('/rest/v1/rpc/my_membership', {method: 'POST', body: '{}'});
+  if(res.offline) return;
+  const company = deviceGet('company');
+  let reason = null;
+  if(res.revoked) reason = 'signed-out';
+  else if(res.ok){
+    const m = res.body;
+    if(!m || !m.technician_id || (company && m.company_id !== company.id)) reason = 'signed-out';
+    else if(m.removed) reason = 'removed';
+    else if(needAdmin && !m.full_access) reason = 'not-admin';
+    else deviceSet('membership', m);
+  }
+  if(reason){
+    const m = deviceGet('membership');
+    if(reason === 'removed'){
+      // The customers on this phone go, but only once what it is holding has
+      // reached the office. Until then it stays signed out and keeps trying.
+      fieldStartWipe('removed', company ? company.id : null);
+      if(onGone) onGone(reason);
+      await fieldFinishWipe();
+      return;
+    }
+    await fieldSignOut();
+    // A reset or demoted account must not open this phone offline either
+    if(m && company) fieldForgetLogin(company.id, m.username);
+    if(onGone) onGone(reason);
+  }
+}
+
+function fieldGoneMessage(reason){
+  if(reason === 'removed') return 'Your sign-in was removed. Check with your office.';
+  if(reason === 'not-admin') return 'Admin access was turned off for your account. Use the Weir technician app instead.';
+  return 'You were signed out. Sign in again.';
+}
+
+// ---- The sign-in screen: company first, then username and password ----
+function fieldLoginParts(){
+  const u = document.getElementById('loginUsername');
+  const p = document.getElementById('loginPassword');
+  const b = document.getElementById('btnLogin');
+  const wrap = el => (el && el.closest && el.closest('.field')) || el;
+  return {user: wrap(u), pass: wrap(p), button: b};
+}
+
+function fieldShowError(msg){
+  const err = document.getElementById('loginError');
+  if(!err) return;
+  err.textContent = msg || '';
+  err.style.display = msg ? 'block' : 'none';
+}
+
+function fieldRenderLogin(){
+  const parts = fieldLoginParts();
+  if(!parts.user || !parts.button) return;
+  let row = document.getElementById('loginCompanyRow');
+  if(!row){
+    const holder = document.createElement('div');
+    holder.innerHTML = '<div id="loginCompanyRow" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 14px;padding:9px 12px;border:1px solid #D9E3E1;border-radius:10px;font-size:13px;">'
+      + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+      + '<span style="color:#5E7371;">Company</span> <strong id="loginCompanyName"></strong></span>'
+      + '<button type="button" id="btnLoginChangeCompany" style="border:none;background:none;color:#16585C;font-weight:600;font-size:13px;cursor:pointer;padding:4px;flex-shrink:0;">Change</button>'
+      + '</div>'
+      + '<div id="loginCompanyStep" style="display:none;margin:0 0 6px;">'
+      + '<p style="font-size:13px;color:#5E7371;margin:0 0 10px;">Enter the company code from your office, or open the setup link they sent you.</p>'
+      + '<div class="field"><label>Company code</label><input id="loginCompanyCode" autocomplete="off" autocapitalize="characters" placeholder="K7WQ2M" style="text-transform:uppercase;"></div>'
+      + '<p id="loginCompanyFound" style="display:none;font-size:14px;margin:0 0 12px;"></p>'
+      + '<button type="button" class="btn btn-primary" id="btnLoginCompany" style="width:100%;">Continue</button>'
+      + '<button type="button" class="btn btn-ghost" id="btnLoginCompanyBack" style="width:100%;margin-top:8px;display:none;">Back</button>'
+      + '</div>';
+    while(holder.firstChild) parts.user.parentNode.insertBefore(holder.firstChild, parts.user);
+    row = document.getElementById('loginCompanyRow');
+
+    document.getElementById('btnLoginChangeCompany').addEventListener('click', ()=> fieldShowCompanyStep(true));
+    document.getElementById('btnLoginCompanyBack').addEventListener('click', ()=>{ fieldPendingCompany = null; fieldRenderLogin(); });
+    document.getElementById('btnLoginCompany').addEventListener('click', fieldCompanyContinue);
+    document.getElementById('loginCompanyCode').addEventListener('keydown', e => { if(e.key === 'Enter') fieldCompanyContinue(); });
+  }
+  const company = deviceGet('company');
+  if(company && company.id){
+    document.getElementById('loginCompanyName').textContent = company.name || '';
+    row.style.display = 'flex';
+    document.getElementById('loginCompanyStep').style.display = 'none';
+    [parts.user, parts.pass, parts.button].forEach(el => { if(el) el.style.display = ''; });
+  } else {
+    fieldShowCompanyStep(false);
+  }
+}
+
+let fieldPendingCompany = null;
+
+function fieldShowCompanyStep(canGoBack){
+  const parts = fieldLoginParts();
+  fieldPendingCompany = null;
+  document.getElementById('loginCompanyRow').style.display = 'none';
+  document.getElementById('loginCompanyStep').style.display = 'block';
+  document.getElementById('loginCompanyFound').style.display = 'none';
+  document.getElementById('btnLoginCompany').textContent = 'Continue';
+  document.getElementById('btnLoginCompanyBack').style.display = canGoBack && deviceGet('company') ? 'block' : 'none';
+  document.getElementById('loginCompanyCode').value = '';
+  [parts.user, parts.pass, parts.button].forEach(el => { if(el) el.style.display = 'none'; });
+  fieldShowError('');
+}
+
+async function fieldCompanyContinue(){
+  const btn = document.getElementById('btnLoginCompany');
+  if(fieldPendingCompany){
+    await fieldUseCompany(fieldPendingCompany);
+    return;
+  }
+  btn.disabled = true;
+  const found = await fieldLookupCompany(document.getElementById('loginCompanyCode').value);
+  btn.disabled = false;
+  if(!found.ok){ fieldShowError(found.message); return; }
+  fieldShowError('');
+  fieldPendingCompany = found.company;
+  const shown = document.getElementById('loginCompanyFound');
+  shown.textContent = '';
+  const strong = document.createElement('strong');
+  strong.textContent = found.company.name;
+  shown.appendChild(document.createTextNode('Company: '));
+  shown.appendChild(strong);
+  shown.style.display = 'block';
+  btn.textContent = 'Use this company';
+}
+
+// Switching company signs out whoever was signed in. This phone's customers and
+// visits are not touched here: they are not on the server yet, so wiping them
+// would lose them for good.
+async function fieldUseCompany(company){
+  const old = deviceGet('company');
+  if(old && old.id !== company.id){
+    // The old company's customers go, once whatever this phone was holding for
+    // them has reached their office
+    if(typeof fieldPendingCount === 'function'){
+      let pending = 0;
+      try{ pending = fieldPendingCount(); }catch(e){}
+      if(pending && typeof fieldFinishWipe === 'function'){
+        fieldStartWipe('company', old.id);
+        const done = await fieldFinishWipe();
+        if(!done){
+          const anyway = await fieldConfirm(pending + (pending === 1 ? ' change has' : ' changes have')
+            + ' not reached ' + fieldEscape(old.name) + ' yet. Switching now loses '
+            + (pending === 1 ? 'it' : 'them') + '. Switch anyway?');
+          if(!anyway){ deviceSet('wipe', null); return; }
+        }
+      }
+      if(typeof fieldWipeCompanyData === 'function') await fieldWipeCompanyData();
+      deviceSet('wipe', null);
+    }
+    await fieldSignOut();
+    if(typeof fieldOnSignedOut === 'function') fieldOnSignedOut();
+  }
+  deviceSet('company', {id: company.id, name: company.name});
+  fieldPendingCompany = null;
+  fieldRenderLogin();
+  const u = document.getElementById('loginUsername');
+  if(u) u.focus();
+}
+
+// A setup link: ?company=CODE. Taken off the address afterwards so a bookmark
+// or a reload doesn't repeat it.
+async function fieldHandleSetupLink(){
+  let code = null;
+  try{ code = new URLSearchParams(location.search).get('company'); }catch(e){}
+  if(!code) return;
+  try{
+    const url = new URL(location.href);
+    url.searchParams.delete('company');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
   }catch(e){}
-})();
+  const found = await fieldLookupCompany(code);
+  if(!found.ok){ fieldShowError(found.message); return; }
+  const old = deviceGet('company');
+  if(old && old.id === found.company.id) return;
+  if(old){
+    const ok = await fieldConfirm('This phone is set up for ' + fieldEscape(old.name) + '. Switch it to '
+      + fieldEscape(found.company.name) + '? Whoever is signed in will be signed out.');
+    if(!ok) return;
+  }
+  await fieldUseCompany(found.company);
+}
+
+function fieldEscape(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function fieldConfirm(message){
+  if(typeof confirmDialog === 'function') return confirmDialog(message, 'Switch');
+  return Promise.resolve(window.confirm(message));
+}
+
+
+// ---------- Sync (field apps) ----------
+// Everything is saved on this phone first and works with no signal. Whenever
+// there is a connection the phone brings down what the office changed and sends
+// up what happened here.
+//
+// What comes down: the customers assigned to whoever is signed in (an admin
+// gets all of them), their own technician profile, the company's details,
+// the chemical and body-of-water setup, and the company-wide settings.
+// What goes up in this version: changes to those customers, such as a visit
+// being finished. Readings and photos stay on the phone until the next step.
+//
+// Settings about this phone — voice mode, the voice button, mic side, photo
+// storage — are never touched by sync. A settings change arriving mid-visit is
+// held until the visit ends, so the rules cannot change under a technician's
+// feet while they are at a pool.
+const SYNC_PAGE = 500;
+const SYNC_OVERLAP_MS = 5000;
+const SYNC_INTERVAL_MS = 60000;
+const SYNC_GONE = '__gone__';
+const SYNC_LIST_FIELDS = ['equipment', 'dogs', 'fountains'];
+const SYNC_SEP = '\u0001';
+const SYNC_ORDER = '__order';
+const SYNC_COMPANY_SETTINGS = ['showBeforePhotos', 'showAfterPhotos', 'showGatePhoto',
+  'requireSkipPhoto', 'requireSkipReason', 'allowRouteReorder', 'showDosageSuggestions',
+  'showWaterBalance', 'autoNotifyAll', 'autoNotifyAllLead', 'showPoolSizeInProfile',
+  'applyPoolDosagesToAll', 'applyPoolChemicalsToAll'];
+const SYNC_SETUP_KEYS = ['chemConfig', 'customChemConfig', 'customBodyOrder', 'routeOrders', 'reportEmailStyle'];
+const SYNC_COMPANY_DETAIL_KEYS = ['companyName', 'ownerName', 'licenseNumber', 'serviceArea',
+  'accountEmail', 'accountPhone', 'businessAddress', 'businessCity', 'businessState',
+  'businessZip', 'businessWebsite'];
+
+function syncStableString(v){
+  if(v === null || typeof v !== 'object') return JSON.stringify(v === undefined ? null : v);
+  if(Array.isArray(v)) return '[' + v.map(syncStableString).join(',') + ']';
+  return '{' + Object.keys(v).sort().filter(k => v[k] !== undefined)
+    .map(k => JSON.stringify(k) + ':' + syncStableString(v[k])).join(',') + '}';
+}
+
+function syncHash(obj){
+  const str = syncStableString(obj);
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for(let i = 0; i < str.length; i++){
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+function syncIsItemList(v){
+  if(!Array.isArray(v)) return false;
+  const ids = new Set();
+  for(const it of v){
+    if(!it || typeof it !== 'object' || Array.isArray(it)) return false;
+    if(typeof it.id !== 'string' && typeof it.id !== 'number') return false;
+    const id = String(it.id);
+    if(id === SYNC_ORDER || ids.has(id)) return false;
+    ids.add(id);
+  }
+  return true;
+}
+
+function syncExplode(c){
+  const flat = {};
+  Object.keys(c || {}).forEach(k=>{
+    const v = c[k];
+    if(v === undefined) return;
+    if(SYNC_LIST_FIELDS.indexOf(k) !== -1 && syncIsItemList(v)){
+      flat[k + SYNC_SEP + SYNC_ORDER] = v.map(it => String(it.id));
+      v.forEach(it=>{ flat[k + SYNC_SEP + String(it.id)] = it; });
+    } else {
+      flat[k] = v;
+    }
+  });
+  return flat;
+}
+
+function syncImplode(flat){
+  const out = {}, lists = {};
+  Object.keys(flat).forEach(key=>{
+    const at = key.indexOf(SYNC_SEP);
+    if(at === -1){ out[key] = flat[key]; return; }
+    const field = key.slice(0, at), sub = key.slice(at + 1);
+    const l = lists[field] || (lists[field] = {order: null, items: new Map()});
+    if(sub === SYNC_ORDER) l.order = flat[key];
+    else l.items.set(sub, flat[key]);
+  });
+  Object.keys(lists).forEach(field=>{
+    const l = lists[field], arr = [];
+    (Array.isArray(l.order) ? l.order : []).forEach(id=>{
+      id = String(id);
+      if(l.items.has(id)){ arr.push(l.items.get(id)); l.items.delete(id); }
+    });
+    l.items.forEach(it => arr.push(it));
+    out[field] = arr;
+  });
+  return out;
+}
+
+function syncFieldHashes(c){
+  const flat = syncExplode(c), f = {};
+  Object.keys(flat).forEach(k=>{ f[k] = syncHash(flat[k]); });
+  return f;
+}
+
+function syncMergeLocal(serverData, localRec, pending){
+  const flat = syncExplode(serverData);
+  const mine = syncExplode(localRec || {});
+  Object.keys(pending || {}).forEach(key=>{
+    if(key === '_deleted') return;
+    if(key in mine) flat[key] = mine[key];
+    else delete flat[key];
+  });
+  Object.keys(flat).forEach(key=>{
+    const at = key.indexOf(SYNC_SEP);
+    if(at === -1) return;
+    const field = key.slice(0, at);
+    if(!(field in flat)) return;
+    if(pending && pending[field]) delete flat[key];
+    else delete flat[field];
+  });
+  return syncImplode(flat);
+}
+
+// ---- What this phone knows about the server ----
+// Kept per company and per technician, so a shared phone keeps them apart, and
+// under the device prefix so it never lands in a backup.
+function syncStateKey(){
+  const c = deviceGet('company'), m = deviceGet('membership');
+  if(!c || !m) return null;
+  return 'sync:' + c.id + ':' + (m.technician_id || 'unknown');
+}
+
+function loadFieldSyncState(){
+  const key = syncStateKey();
+  const s = key ? deviceGet(key) : null;
+  const base = (s && typeof s === 'object') ? s : {};
+  return {
+    pulledOnce: base.pulledOnce === true,
+    backupAt: base.backupAt || null,
+    lastSyncedAt: base.lastSyncedAt || null,
+    // When the phone last reached the office at all, and what went wrong on the
+    // way, if anything. Kept apart so the card can never say "up to date" while
+    // something quietly failed.
+    lastReachedAt: base.lastReachedAt || null,
+    lastTrouble: base.lastTrouble || null,
+    unknownHere: base.unknownHere || {},
+    lastRefusedAt: base.lastRefusedAt || null,
+    lastRefusedName: base.lastRefusedName || null,
+    lastRefusedWhy: base.lastRefusedWhy || null,
+    customers: base.customers || {cursor: null, known: {}, seen: {}, edits: {}},
+    records: base.records || {cursor: null, known: {}, seen: {}},
+    work: base.work || {known: {}, seen: {}, edits: {}, refused: {}},
+    visits: base.visits || {sent: {}},
+    photos: base.photos || {sent: {}}
+  };
+}
+
+function saveFieldSyncState(state){
+  const key = syncStateKey();
+  if(!key) return false;
+  return deviceSet(key, state);
+}
+
+// Safeguard: a full copy of this phone's data before its first sync, kept in
+// the browser's own database and untouched afterwards
+const SYNC_BACKUP_DB = 'poollog-sync-backups';
+
+function fieldBackupDb(){
+  return new Promise((resolve, reject)=>{
+    let req;
+    try{ req = indexedDB.open(SYNC_BACKUP_DB, 1); }catch(e){ reject(e); return; }
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains('backups')) db.createObjectStore('backups', {keyPath: 'key'});
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+function fieldCollectBackup(){
+  const data = {};
+  for(let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(k && k.indexOf(STORAGE_PREFIX) === 0) data[k.slice(STORAGE_PREFIX.length)] = localStorage.getItem(k);
+  }
+  return {app: 'Weir', createdAt: new Date().toISOString(), data: data};
+}
+
+async function fieldFirstSyncBackup(companyId){
+  const db = await fieldBackupDb();
+  const key = 'before-first-sync:' + companyId;
+  const existing = await new Promise((resolve, reject)=>{
+    const r = db.transaction('backups', 'readonly').objectStore('backups').get(key);
+    r.onsuccess = ()=> resolve(r.result || null);
+    r.onerror = ()=> reject(r.error);
+  });
+  if(existing) return existing.payload.createdAt;
+  const payload = fieldCollectBackup();
+  await new Promise((resolve, reject)=>{
+    const tx = db.transaction('backups', 'readwrite');
+    tx.objectStore('backups').put({key, payload});
+    tx.oncomplete = ()=> resolve();
+    tx.onerror = ()=> reject(tx.error);
+    tx.onabort = ()=> reject(tx.error);
+  });
+  return payload.createdAt;
+}
+
+// ---- Company records arriving from the office ----
+let syncHeldSettings = null;     // a settings change that arrived mid-visit
+
+function syncVisitInProgress(){
+  try{ return typeof currentVisitCustomerId !== 'undefined' && !!currentVisitCustomerId; }catch(e){ return false; }
+}
+
+function syncApplySettings(company){
+  const settings = lsGet('settings') || {};
+  SYNC_COMPANY_SETTINGS.forEach(key=>{ if(key in company) settings[key] = company[key]; });
+  if(!lsSet('settings', settings)) return false;
+  if(typeof appSettings === 'object' && appSettings) Object.assign(appSettings, settings);
+  return true;
+}
+
+// Called when a visit ends, so anything held is applied then
+function syncApplyHeldSettings(){
+  if(!syncHeldSettings) return;
+  const held = syncHeldSettings;
+  syncHeldSettings = null;
+  syncApplySettings(held);
+}
+
+function syncApplyRecord(kind, id, data, deleted, agreed){
+  const workList = (typeof SYNC_WORK_LISTS !== 'undefined')
+    ? SYNC_WORK_LISTS.find(([, k]) => k === kind) : null;
+  if(workList){
+    const key = workList[0];
+    const list = lsGet(key) || [];
+    const i = list.findIndex(x => x && String(x.id) === String(id));
+    if(deleted){ if(i === -1) return true; list.splice(i, 1); }
+    else if(i === -1) list.push(Object.assign({}, data));
+    else {
+      // Anything ticked off or moved here that has not gone up yet stays as it
+      // is — including a change made while this very download was in flight,
+      // which is why each field is compared with what the server last agreed.
+      const merged = Object.assign({}, data);
+      const was = agreed || {};
+      // Every field this phone holds, and every field the server last agreed
+      const fields = new Set(Object.keys(list[i]).concat(Object.keys(was)));
+      fields.forEach(field=>{
+        const mineNow = list[i][field];
+        if(was[field] !== undefined && syncHash(mineNow) === was[field]) return;  // nothing unsent
+        if(was[field] === undefined && mineNow === undefined) return;
+        if(mineNow !== undefined) merged[field] = mineNow;
+        else delete merged[field];
+      });
+      list[i] = merged;
+    }
+    const wasList = syncStableString(lsGet(key) || []);
+    if(syncStableString(list) === wasList) return true;      // nothing new here
+    syncApplyingRemote = true;
+    const wrote = lsSet(key, list);
+    syncApplyingRemote = false;
+    if(!wrote) return false;
+    try{ if(typeof renderRouteTasks === 'function') renderRouteTasks(); }catch(e){}
+    try{ if(typeof renderHomeList === 'function') renderHomeList(); }catch(e){}
+    return true;
+  }
+  if(kind === 'technician'){
+    const list = lsGet('technicians') || [];
+    const i = list.findIndex(t => t && String(t.id) === String(id));
+    if(deleted){
+      if(i === -1) return true;
+      list.splice(i, 1);
+    } else if(i === -1){
+      list.push(Object.assign({}, data));
+    } else {
+      list[i] = Object.assign({}, data);
+    }
+    if(!lsSet('technicians', list)) return false;
+    try{ if(typeof technicians !== 'undefined') technicians = list; }catch(e){}
+    // Whoever is signed in keeps their own settings up to date
+    try{
+      const m = deviceGet('membership');
+      if(m && String(m.technician_id) === String(id) && typeof currentUser !== 'undefined' && currentUser){
+        currentUser = fieldCurrentUser();
+      }
+    }catch(e){}
+    return true;
+  }
+  if(kind === 'company'){
+    if(deleted) return true;
+    let ok = true;
+    SYNC_COMPANY_DETAIL_KEYS.forEach(key=>{ if(key in data && !lsSet(key, data[key])) ok = false; });
+    return ok;
+  }
+  if(kind === 'setup'){
+    if(deleted || !('value' in data)) return true;
+    const saved = lsSet(id, data.value);
+    // The app holds its own copy of the setup from when it started. Writing to
+    // storage alone changed nothing on screen until the app was restarted,
+    // which is why quick buttons set at the office never appeared out here.
+    if(saved && id === 'chemConfig'){
+      // Only the copy in memory is refreshed. Redrawing the route here would
+      // close a customer panel the technician had open.
+      try{ chemConfig = loadChemConfig(); }catch(e){}
+    }
+    return saved;
+  }
+  if(kind === 'setting'){
+    if(deleted) return true;
+    if(syncVisitInProgress()){
+      // Held until the visit ends: the rules must not change mid-pool
+      syncHeldSettings = Object.assign({}, syncHeldSettings || {}, data);
+      return true;
+    }
+    return syncApplySettings(data);
+  }
+  return true;
+}
+
+async function syncPullRecords(state){
+  const r = state.records;
+  const rows = [];
+  const since = r.cursor ? new Date(new Date(r.cursor).getTime() - SYNC_OVERLAP_MS).toISOString() : null;
+  for(let offset = 0; ; offset += SYNC_PAGE){
+    let path = '/rest/v1/company_records?select=kind,id,data,deleted,updated_at'
+      + '&order=updated_at.asc,kind.asc,id.asc&limit=' + SYNC_PAGE + '&offset=' + offset;
+    if(since) path += '&updated_at=gte.' + encodeURIComponent(since);
+    const res = await fieldAuthed(path);
+    if(!res.ok || !Array.isArray(res.body)) return {ok: false, offline: !!res.offline, revoked: !!res.revoked};
+    rows.push(...res.body);
+    if(res.body.length < SYNC_PAGE) break;
+  }
+  let applied = 0;
+  rows.forEach(row=>{
+    const key = row.kind + '\u0002' + row.id;
+    const hashes = syncFieldHashes(row.data);
+    // What the server last agreed for this record, so unsent changes survive
+    const agreed = state.work && state.work.known && state.work.known[key] ? state.work.known[key].f : null;
+    if(!syncApplyRecord(row.kind, row.id, row.data, row.deleted, agreed)) return;
+    r.known[key] = {u: row.updated_at, d: !!row.deleted, f: hashes};
+    if(!r.cursor || row.updated_at > r.cursor) r.cursor = row.updated_at;
+    applied++;
+  });
+  return {ok: true, applied: applied};
+}
+
+// ---- Customers ----
+// What this phone may see is decided by the server: a technician gets the
+// customers assigned to them, an admin gets all of them. A customer that is no
+// longer theirs simply stops coming down, and is taken off this phone.
+async function syncPullCustomers(state){
+  const c = state.customers;
+  const listed = [];
+  for(let offset = 0; ; offset += SYNC_PAGE){
+    const res = await fieldAuthed('/rest/v1/customers?select=id,updated_at,deleted'
+      + '&order=id.asc&limit=' + SYNC_PAGE + '&offset=' + offset);
+    if(!res.ok || !Array.isArray(res.body)) return {ok: false, offline: !!res.offline, revoked: !!res.revoked};
+    listed.push(...res.body);
+    if(res.body.length < SYNC_PAGE) break;
+  }
+  const mine = new Map(listed.map(row => [String(row.id), row]));
+  const wanted = listed.filter(row=>{
+    if(row.deleted) return false;
+    const k = c.known[String(row.id)];
+    return !k || k.u !== row.updated_at || c.edits[String(row.id)];
+  }).map(row => String(row.id));
+
+  const fetched = [];
+  for(let i = 0; i < wanted.length; i += 50){
+    const chunk = wanted.slice(i, i + 50).map(id => '"' + id.replace(/"/g, '\\"') + '"').join(',');
+    const res = await fieldAuthed('/rest/v1/customers?select=id,data,deleted,updated_at&id=in.('
+      + encodeURIComponent(chunk) + ')');
+    if(!res.ok || !Array.isArray(res.body)) return {ok: false, offline: !!res.offline, revoked: !!res.revoked};
+    fetched.push(...res.body);
+  }
+
+  let list = lsGet('customers') || [];
+  const byId = new Map(list.map((x, i) => [String(x.id), i]));
+  fetched.forEach(row=>{
+    const id = String(row.id);
+    const pending = c.edits[id];
+    const hashes = syncFieldHashes(row.data);
+    const local = byId.has(id) ? list[byId.get(id)] : null;
+    if(pending){
+      const merged = syncMergeLocal(row.data, local, pending);
+      if(local) list[byId.get(id)] = merged;
+      else { list.push(merged); byId.set(id, list.length - 1); }
+      const k = c.known[id] || {u: null, d: false, f: {}};
+      Object.keys(hashes).forEach(f => { if(!pending[f]) k.f[f] = hashes[f]; });
+      c.known[id] = k;
+      c.seen[id] = syncFieldHashes(merged);
+      return;
+    }
+    if(local) list[byId.get(id)] = row.data;
+    else { list.push(row.data); byId.set(id, list.length - 1); }
+    c.known[id] = {u: row.updated_at, d: !!row.deleted, f: hashes};
+    c.seen[id] = hashes;
+  });
+
+  // Anything the server no longer shows this phone: deleted, or given to
+  // someone else. Their visits and readings stay on the phone.
+  const drop = list.filter(x => !mine.has(String(x.id)) || mine.get(String(x.id)).deleted)
+                   .filter(x => !c.edits[String(x.id)])
+                   .map(x => String(x.id));
+  if(drop.length){
+    const goneIds = new Set(drop);
+    list = list.filter(x => !goneIds.has(String(x.id)));
+    drop.forEach(id=>{ c.seen[id] = SYNC_GONE; if(c.known[id]) c.known[id].d = true; });
+  }
+  // Writing an unchanged list is what started the loop: every write scheduled
+  // another sync, which wrote again, and the route redrew endlessly
+  const beforeSave = syncStableString(lsGet('customers') || []);
+  const afterSave = syncStableString(list);
+  if(beforeSave !== afterSave){
+    syncApplyingRemote = true;
+    const saved = lsSet('customers', list);
+    syncApplyingRemote = false;
+    if(!saved) return {ok: false, storage: true};
+  }
+  try{ if(typeof customers !== 'undefined') customers = list; }catch(e){}
+  return {ok: true, count: list.length, changed: beforeSave !== afterSave};
+}
+
+// What changed on this phone since the server last agreed
+function syncScanCustomers(state, now){
+  const c = state.customers;
+  const stamp = now || new Date().toISOString();
+  const list = lsGet('customers') || [];
+  const present = new Set();
+  list.forEach(rec=>{
+    if(!rec || rec.id === undefined || rec.id === null) return;
+    const id = String(rec.id);
+    present.add(id);
+    const f = syncFieldHashes(rec);
+    const k = c.known[id];
+    const prev = c.seen[id];
+    const e = Object.assign({}, c.edits[id] || {});
+    const fields = new Set(Object.keys(f).concat(k ? Object.keys(k.f || {}) : []));
+    fields.forEach(field=>{
+      if(k && k.f && k.f[field] === f[field]){ delete e[field]; return; }
+      const noticed = prev && prev !== SYNC_GONE && prev[field] === f[field];
+      if(!noticed || !e[field]) e[field] = stamp;
+    });
+    delete e._deleted;                        // phones never delete customers
+    c.seen[id] = f;
+    if(Object.keys(e).length) c.edits[id] = e; else delete c.edits[id];
+  });
+  Object.keys(c.edits).forEach(id=>{ if(!present.has(id)) delete c.edits[id]; });
+}
+
+async function syncPushCustomers(state){
+  const c = state.customers;
+  let pushed = 0, refused = 0;
+  for(const id of Object.keys(c.edits)){
+    const list = lsGet('customers') || [];
+    const rec = list.find(x => String(x.id) === id);
+    if(!rec){ delete c.edits[id]; continue; }
+    const pending = Object.assign({}, c.edits[id]);
+    const mine = syncExplode(rec);
+    const changes = {};
+    const sentHash = {};
+    const listed = new Set();
+    Object.keys(pending).forEach(key=>{
+      if(key === '_deleted') return;
+      sentHash[key] = key in mine ? syncHash(mine[key]) : undefined;
+      const at = key.indexOf(SYNC_SEP);
+      if(at === -1){
+        if(listed.has(key)) return;
+        changes[key] = key in mine ? {t: pending[key], v: mine[key]} : {t: pending[key], gone: true};
+        return;
+      }
+      const field = key.slice(0, at), sub = key.slice(at + 1);
+      if(!listed.has(field)){ listed.add(field); changes[field] = {items: {}}; }
+      if(sub === SYNC_ORDER){ if(key in mine) changes[field].order = {t: pending[key], v: mine[key]}; }
+      else changes[field].items[sub] = key in mine ? {t: pending[key], v: mine[key]} : {t: pending[key], gone: true};
+    });
+    if(!Object.keys(changes).length){ delete c.edits[id]; continue; }
+
+    const k = c.known[id];
+    const res = await fieldAuthed('/rest/v1/rpc/push_customer_fields', {
+      method: 'POST',
+      body: JSON.stringify({p_id: id, p_changes: changes, p_base: k && k.u ? k.u : null})
+    });
+    if(res.offline || res.revoked || res.status === 0) return {ok: false, offline: !!res.offline, revoked: !!res.revoked, pushed};
+    if(!res.ok || !res.body || !res.body.result){
+      // The server refused this one — a customer no longer theirs, for
+      // instance. The office's version wins: the change is dropped and this
+      // phone forgets what it thought it knew, so the next pull brings the
+      // office's copy down whole. Keeping it would leave this phone quietly
+      // showing something the office has already changed.
+      refused++;
+      delete c.edits[id];
+      // Take the office's copy now, whole, so this phone stops showing
+      // something the office has already decided otherwise
+      const theirs = await fieldAuthed('/rest/v1/customers?select=id,data,deleted,updated_at&id=eq.'
+        + encodeURIComponent(id));
+      if(theirs.ok && Array.isArray(theirs.body) && !theirs.body.length){
+        // The office has no such customer and will not take this one. It stays
+        // on this phone — deleting someone's customers because the office has
+        // not got them would be far worse — but it is counted and shown, since
+        // a customer the office cannot see is a problem somebody must sort out.
+        state.unknownHere = state.unknownHere || {};
+        state.unknownHere[id] = (rec && rec.name) || id;
+      } else if(theirs.ok && Array.isArray(theirs.body) && theirs.body.length){
+        if(state.unknownHere) delete state.unknownHere[id];
+        const row = theirs.body[0];
+        const cur = lsGet('customers') || [];
+        const at = cur.findIndex(x => String(x.id) === id);
+        if(row.deleted){
+          if(at !== -1) cur.splice(at, 1);
+          c.seen[id] = SYNC_GONE;
+        } else {
+          if(at === -1) cur.push(row.data); else cur[at] = row.data;
+          c.seen[id] = syncFieldHashes(row.data);
+        }
+        c.known[id] = {u: row.updated_at, d: !!row.deleted, f: syncFieldHashes(row.data)};
+        if(lsSet('customers', cur)){
+          try{ customers = cur; }catch(e){}
+          try{ if(typeof renderHomeList === 'function') renderHomeList(); }catch(e){}
+        }
+      }
+      state.lastRefusedAt = new Date().toISOString();
+      state.lastRefusedName = (rec && rec.name) || id;
+      state.lastRefusedWhy = (res.body && (res.body.message || res.body.msg)) || 'the office refused it';
+      saveFieldSyncState(state);
+      continue;
+    }
+    // Anything changed here while this was in flight stays waiting
+    const after = (lsGet('customers') || []).find(x => String(x.id) === id);
+    const nowFlat = after ? syncExplode(after) : null;
+    const still = Object.assign({}, c.edits[id] || {});
+    Object.keys(pending).forEach(field=>{
+      if(still[field] !== pending[field]) return;
+      const h = nowFlat && field in nowFlat ? syncHash(nowFlat[field]) : undefined;
+      if(after && h === sentHash[field]) delete still[field];
+    });
+    c.known[id] = {u: res.body.updated_at, d: !!res.body.deleted, f: syncFieldHashes(res.body.data)};
+    if(!Object.keys(still).length){
+      delete c.edits[id];
+      const merged = syncMergeLocal(res.body.data, after, {});
+      const cur = lsGet('customers') || [];
+      const at = cur.findIndex(x => String(x.id) === id);
+      if(at !== -1){ cur[at] = merged; if(lsSet('customers', cur)){ try{ customers = cur; }catch(e){} } }
+      c.seen[id] = syncFieldHashes(merged);
+    } else {
+      c.edits[id] = still;
+    }
+    pushed++;
+    saveFieldSyncState(state);
+  }
+  return {ok: true, pushed: pushed, refused: refused};
+}
+
+let syncRunning = false;
+let syncAgain = false;
+let syncTimer = null;
+
+// ---- Visits: the readings and skips recorded on this phone ----
+// Append-only on the server (snippet 08): a visit goes up once, and sending it
+// again after a dropped signal changes nothing. Photos stay on this phone for
+// now, so what goes up is the readings, the notes and what was done, with a
+// note that photos exist here.
+const SYNC_VISIT_PHOTO_FIELDS = ['photo', 'beforePhoto', 'gatePhoto', 'afterPhoto', 'customPhotos'];
+const SYNC_VISITS_PER_RUN = 40;
+
+function syncVisitWithoutPhotos(reading){
+  const out = {};
+  let photos = false;
+  Object.keys(reading || {}).forEach(key=>{
+    if(SYNC_VISIT_PHOTO_FIELDS.indexOf(key) !== -1){
+      const v = reading[key];
+      if(v && (typeof v === 'string' || Object.keys(v).length)) photos = true;
+      return;
+    }
+    out[key] = reading[key];
+  });
+  if(photos) out.photosOnPhone = true;
+  return out;
+}
+
+// The local date a visit belongs to. Times are stored as an instant, and
+// slicing the text would put an evening visit in Arizona on the next day.
+function syncVisitServiceDate(stamp){
+  const d = new Date(stamp);
+  if(isNaN(d)) return String(stamp || '').slice(0, 10);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Everything recorded on this phone, as one list
+function syncVisitsHere(){
+  const out = [];
+  (lsGet('customers') || []).forEach(c=>{
+    if(!c || !c.id) return;
+    const id = String(c.id);
+    (lsGet(readingsStorageKey(id, 'pool')) || []).forEach(r=>{
+      if(r && r.id) out.push({customerId: id, kind: 'reading', body: 'pool', reading: r});
+    });
+    (lsGet(readingsStorageKey(id, 'spa')) || []).forEach(r=>{
+      if(r && r.id) out.push({customerId: id, kind: 'reading', body: 'spa', reading: r});
+    });
+    (c.fountains || []).forEach(f=>{
+      if(!f || !f.id) return;
+      (lsGet(fountainReadingsStorageKey(id, f.id)) || []).forEach(r=>{
+        if(r && r.id) out.push({customerId: id, kind: 'reading', body: 'fountain:' + f.id, reading: r});
+      });
+    });
+    (lsGet(skippedVisitsStorageKey(id)) || []).forEach(sk=>{
+      if(sk && sk.id) out.push({customerId: id, kind: 'skip', body: 'pool', reading: sk});
+    });
+  });
+  return out;
+}
+
+function syncVisitKey(v){ return v.customerId + '\u0002' + v.kind + '\u0002' + v.body + '\u0002' + v.reading.id; }
+
+// Sends what has not gone up yet, newest first, a batch at a time so a phone
+// with years of history does not sit uploading on one connection.
+async function syncPushVisits(state){
+  const sent = state.visits.sent || (state.visits.sent = {});
+  const here = syncVisitsHere().filter(v => !sent[syncVisitKey(v)]);
+  here.sort((a, b)=> String(b.reading.date || '').localeCompare(String(a.reading.date || '')));
+  let pushed = 0, refused = 0;
+  for(const v of here.slice(0, SYNC_VISITS_PER_RUN)){
+    const when = v.reading.date || v.reading.timestamp || new Date().toISOString();
+    const res = await fieldAuthed('/rest/v1/rpc/push_visit', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_customer_id: v.customerId,
+        p_kind: v.kind,
+        p_body: v.body,
+        p_id: String(v.reading.id),
+        p_data: syncVisitWithoutPhotos(v.reading),
+        p_occurred_at: when,
+        p_service_date: v.kind === 'skip' && v.reading.date && v.reading.date.length === 10
+          ? v.reading.date : syncVisitServiceDate(when)
+      })
+    });
+    if(res.offline || res.revoked || res.status === 0){
+      return {ok: false, offline: !!res.offline, pushed: pushed, refused: refused, more: true};
+    }
+    if(res.status === 400 || res.status === 403){
+      // The office does not accept this one — a customer it does not have, for
+      // instance. Keeping it at the front would block everything behind it.
+      sent[syncVisitKey(v)] = 'refused';
+      refused++;
+      saveFieldSyncState(state);
+      continue;
+    }
+    if(!res.ok || !res.body || !res.body.result) return {ok: false, pushed: pushed, refused: refused, more: true};
+    sent[syncVisitKey(v)] = true;
+    pushed++;
+    saveFieldSyncState(state);          // per visit, so a dropped signal resumes
+  }
+  return {ok: true, pushed: pushed, refused: refused, more: here.length > SYNC_VISITS_PER_RUN};
+}
+
+// ---- Work records: tasks, filter cleans, work orders and one-day moves ----
+// They arrive here like the rest. Two of them go back the other way: ticking a
+// task off, and moving one of this person's own visits to another day. The
+// server allows exactly that and nothing else (snippet 09).
+const SYNC_WORK_LISTS = [
+  ['tasks', 'task'],
+  ['scheduledFilterCleans', 'filter_clean'],
+  ['scheduledWorkOrders', 'work_order'],
+  ['rescheduledVisits', 'reschedule']
+];
+const SYNC_WORK_SENDABLE = ['task', 'reschedule'];
+const SYNC_TASK_FIELDS = ['done', 'doneAt', 'doneBy'];
+
+function syncWorkLocal(){
+  const out = {};
+  SYNC_WORK_LISTS.forEach(([key, kind])=>{
+    if(SYNC_WORK_SENDABLE.indexOf(kind) === -1) return;
+    (lsGet(key) || []).forEach(item=>{
+      if(item && item.id) out[kind + '\u0002' + String(item.id)] = Object.assign({}, item);
+    });
+  });
+  return out;
+}
+
+// Notice what was ticked off or moved on this phone
+function syncScanWork(state, now){
+  const wk = state.work;
+  const stamp = now || new Date().toISOString();
+  const local = syncWorkLocal();
+  Object.keys(local).forEach(key=>{
+    const f = syncFieldHashes(local[key]);
+    // Set aside after the office refused it, until it changes here again
+    if(wk.refused && wk.refused[key]){
+      if(syncStableString(wk.refused[key]) === syncStableString(f)) return;
+      delete wk.refused[key];
+    }
+    const k = wk.known[key], prev = wk.seen[key];
+    const e = Object.assign({}, wk.edits[key] || {});
+    const fields = new Set(Object.keys(f).concat(k ? Object.keys(k.f || {}) : []));
+    fields.forEach(field=>{
+      if(k && k.f && k.f[field] === f[field]){ delete e[field]; return; }
+      // Only the fields the server will accept are ever sent
+      if(key.indexOf('task\u0002') === 0 && SYNC_TASK_FIELDS.indexOf(field) === -1) return;
+      const noticed = prev && prev[field] === f[field];
+      if(!noticed || !e[field]) e[field] = stamp;
+    });
+    wk.seen[key] = f;
+    if(Object.keys(e).length) wk.edits[key] = e; else delete wk.edits[key];
+  });
+  // Nothing on this phone is ever sent as a deletion: only the office deletes
+  Object.keys(wk.edits).forEach(key=>{ if(!local[key]) delete wk.edits[key]; });
+}
+
+async function syncPushWork(state){
+  const wk = state.work;
+  syncScanWork(state);
+  const local = syncWorkLocal();
+  let pushed = 0, refused = 0;
+  for(const key of Object.keys(wk.edits)){
+    const at = key.indexOf('\u0002');
+    const kind = key.slice(0, at), id = key.slice(at + 1);
+    const pending = Object.assign({}, wk.edits[key]);
+    const mine = local[key];
+    if(!mine){ delete wk.edits[key]; continue; }
+    const changes = {}, sentHash = {};
+    Object.keys(pending).forEach(field=>{
+      if(mine[field] === undefined) return;
+      sentHash[field] = syncHash(mine[field]);
+      changes[field] = {t: pending[field], v: mine[field]};
+    });
+    if(!Object.keys(changes).length){ delete wk.edits[key]; continue; }
+    const k = wk.known[key];
+    const res = await fieldAuthed('/rest/v1/rpc/push_record_fields', {
+      method: 'POST',
+      body: JSON.stringify({p_kind: kind, p_id: id, p_changes: changes, p_base: k && k.u ? k.u : null})
+    });
+    if(res.offline || res.revoked || res.status === 0) return {ok: false, offline: !!res.offline, pushed: pushed, refused: refused};
+    if(res.status === 400 || res.status === 403){
+      // The office does not allow this one. Keeping it would block the rest, and
+      // sending it again every minute would be pointless, so it is set aside
+      // until it changes here again.
+      delete wk.edits[key];
+      wk.refused = wk.refused || {};
+      wk.refused[key] = syncFieldHashes(mine);
+      refused++;
+      saveFieldSyncState(state);
+      continue;
+    }
+    if(!res.ok || !res.body || !res.body.result) return {ok: false, pushed: pushed, refused: refused};
+    wk.known[key] = {u: res.body.updated_at, f: syncFieldHashes(res.body.data)};
+    if(!res.body.deleted) syncApplyRecord(kind, id, res.body.data, false);
+    wk.seen[key] = syncFieldHashes(syncWorkLocal()[key] || res.body.data);
+    delete wk.edits[key];
+    pushed++;
+    saveFieldSyncState(state);
+  }
+  return {ok: true, pushed: pushed, refused: refused};
+}
+
+// ---- Clearing a phone: after a removal, or when it changes company ----
+// A phone holds customers' addresses, gate codes and notes. When the office
+// removes someone, or the phone is set up for a different company, that has to
+// go — but never before what the phone was holding has reached the office.
+// Until it has, the phone stays signed out and keeps trying whenever it has
+// signal. Nothing can be done about a phone that never connects again.
+const FIELD_DEVICE_SETTINGS = ['voiceModeEnabled', 'pushToTalkEnabled', 'micSide',
+  'showTechniciansTab', 'storePhotos'];
+
+// How much this phone is still holding that the office has not got
+function fieldPendingCount(state){
+  const s = state || loadFieldSyncState();
+  let n = Object.keys(s.customers.edits || {}).length + Object.keys(s.work.edits || {}).length;
+  const sent = (s.visits && s.visits.sent) || {};
+  try{ n += syncVisitsHere().filter(v => !sent[syncVisitKey(v)]).length; }catch(e){}
+  return n;
+}
+
+function fieldClearDatabase(name){
+  return new Promise(resolve=>{
+    try{
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = req.onerror = req.onblocked = ()=> resolve();
+    }catch(e){ resolve(); }
+  });
+}
+
+// Everything belonging to the company goes; how this phone itself is set up stays
+async function fieldWipeCompanyData(){
+  const keep = {};
+  const settings = lsGet('settings') || {};
+  FIELD_DEVICE_SETTINGS.forEach(k=>{ if(settings[k] !== undefined) keep[k] = settings[k]; });
+  const mine = [];
+  for(let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(k && k.indexOf(STORAGE_PREFIX) === 0) mine.push(k);
+  }
+  mine.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  lsSet('settings', keep);
+  try{ customers = []; }catch(e){}
+  await fieldClearDatabase(PHOTO_DB);
+  await fieldClearDatabase(SYNC_BACKUP_DB);   // it holds the same customers
+  const key = syncStateKey();
+  if(key) deviceSet(key, null);
+  try{ if(typeof renderHomeList === 'function') renderHomeList(); }catch(e){}
+}
+
+// Asked for when the office removes someone, or the phone switches company.
+// The wipe waits for the upload; both are remembered so closing the app does
+// not lose the intention.
+function fieldStartWipe(reason, companyId){
+  const m = deviceGet('membership');
+  // Who this was is written down now: signing out clears it, and the phone may
+  // not finish clearing until days later
+  deviceSet('wipe', {reason: reason, companyId: companyId || (deviceGet('company') || {}).id,
+                     username: m ? m.username : null, since: new Date().toISOString()});
+}
+
+// While a phone is waiting to finish sending, the message belongs on the
+// sign-in screen, which is where whoever holds it will be looking
+function fieldSyncStatus(text){
+  if(!text) return;
+  const el = document.getElementById('fieldSyncStatus');
+  if(el) el.textContent = text;
+  // While a phone is waiting to clear itself, whoever holds it is looking at
+  // the sign-in screen
+  if(deviceGet('wipe')){ try{ fieldShowError(text); }catch(e){} }
+}
+
+// What the Settings tab shows: when it last reached the office, and what is
+// still waiting
+function fieldSyncSummary(){
+  if(!fieldCurrentUser()) return 'Not signed in.';
+  const state = loadFieldSyncState();
+  let pending = 0;
+  try{ pending = fieldPendingCount(state); }catch(e){}
+  const last = (state.lastReachedAt || state.lastSyncedAt)
+    ? new Date(state.lastReachedAt && state.lastReachedAt > (state.lastSyncedAt || '')
+               ? state.lastReachedAt : state.lastSyncedAt || state.lastReachedAt) : null;
+  const when = last && !isNaN(last)
+    ? last.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : null;
+  if(typeof navigator !== 'undefined' && navigator.onLine === false){
+    return 'Offline' + (pending ? ' — ' + pending + (pending === 1 ? ' change' : ' changes')
+      + ' waiting to send.' : ' — everything here has been sent.');
+  }
+  if(!when) return pending ? pending + (pending === 1 ? ' change' : ' changes') + ' to send.'
+    : 'Waiting for the first sync\u2026';
+  const trouble = state.lastTrouble ? ' ' + state.lastTrouble.charAt(0).toUpperCase()
+    + state.lastTrouble.slice(1) + ' — it will try again.' : '';
+  const lastReport = deviceGet('lastReport');
+  const reportNote = lastReport
+    ? ' Last report ' + (lastReport.by === 'office'
+        ? 'went out from the office'
+          + (lastReport.sent !== undefined ? ' with ' + lastReport.sent
+              + (lastReport.gathered && lastReport.gathered !== lastReport.sent
+                  ? ' of ' + lastReport.gathered : '')
+              + (lastReport.sent === 1 ? ' photo' : ' photos')
+              + (lastReport.linked ? ' (' + lastReport.linked + ' as links)' : '')
+              + (lastReport.taken && lastReport.taken !== lastReport.gathered
+                  ? ' \u2014 the visit had ' + lastReport.taken : '')
+              + (lastReport.unreadable ? ' \u2014 ' + lastReport.unreadable
+                  + ' could not be read from this phone' : '') : '')
+          + '.'
+          + ((lastReport.missing && lastReport.missing.length)
+              ? ' Missing: ' + lastReport.missing.join(', ') + '.' : '')
+        : 'went the old way (' + (lastReport.why || 'the office could not send it') + ').')
+    : '';
+  const unknown = Object.values(state.unknownHere || {});
+  const unknownNote = unknown.length
+    ? ' ' + unknown.length + (unknown.length === 1 ? ' customer on this phone is' : ' customers on this phone are')
+      + ' not known to the office (' + unknown.slice(0, 3).join(', ') + (unknown.length > 3 ? ', …' : '')
+      + '), so nothing done to them there can reach this phone.'
+    : '';
+  const refused = state.lastRefusedAt
+    ? ' The office did not accept a change to ' + (state.lastRefusedName || 'a customer')
+      + ' (' + (state.lastRefusedWhy || 'refused') + '), so its version is being used.'
+    : '';
+  const headline = pending
+    ? 'Last synced ' + when + ' — ' + pending + (pending === 1 ? ' change' : ' changes') + ' still to send.'
+    : (state.lastTrouble ? 'Last reached the office ' + when + '.'
+       : 'Up to date with the office. Last synced ' + when + '.');
+  return headline + trouble + reportNote + refused + unknownNote;
+}
+
+function fieldRenderSyncCard(){
+  const el = document.getElementById('fieldSyncStatus');
+  if(el) el.textContent = fieldSyncSummary();
+}
+
+function fieldWipeMessage(pending, reason){
+  const who = reason === 'company' ? 'This phone is being set up for another company.'
+    : 'Your sign-in was removed.';
+  return pending
+    ? who + ' ' + pending + (pending === 1 ? ' change is' : ' changes are')
+      + ' still to reach the office — this phone will finish sending when it has signal.'
+    : who + ' This phone has been cleared.';
+}
+
+// Runs on every sync, and whenever the app opens
+async function fieldFinishWipe(){
+  const wipe = deviceGet('wipe');
+  if(!wipe) return false;
+  const state = loadFieldSyncState();
+  let pending = fieldPendingCount(state);
+
+  if(pending && deviceGet('session')){
+    // Still signed in enough to upload: send what is left. A removed technician
+    // has seven days for exactly this (snippet 06).
+    try{
+      const work = await syncPushWork(state);
+      const visits = await syncPushVisits(state);
+      const customers = await syncPushCustomers(state);
+      saveFieldSyncState(state);
+      if(!work.ok || !visits.ok || !customers.ok){
+        fieldSyncStatus(fieldWipeMessage(fieldPendingCount(), wipe.reason));
+        return false;
+      }
+    }catch(e){
+      return false;
+    }
+    pending = fieldPendingCount();
+  }
+  if(pending && deviceGet('session')){
+    fieldSyncStatus(fieldWipeMessage(pending, wipe.reason));
+    return false;
+  }
+
+  const membership = deviceGet('membership');
+  const username = wipe.username || (membership && membership.username);
+  await fieldWipeCompanyData();
+  await fieldSignOut();
+  if(wipe.companyId && username) fieldForgetLogin(wipe.companyId, username);
+  deviceSet('wipe', null);
+  if(typeof fieldOnSignedOut === 'function') fieldOnSignedOut();
+  fieldShowError(fieldWipeMessage(0, wipe.reason));
+  return true;
+}
+
+// ---- Photos: up to the office, and back again when needed ----
+// Photos are taken on the phone and kept in its own database. They go up to the
+// office in small batches, because they are far bigger than anything else that
+// syncs. Once the office has one, the phone keeps its copy for 30 days and then
+// lets it go; if a report needs it after that, it is fetched back.
+const SYNC_PHOTO_BUCKET = 'visit-photos';
+const SYNC_PHOTOS_PER_RUN = 6;
+const SYNC_PHOTO_KEEP_DAYS = 30;
+
+function syncPhotoState(state){
+  if(!state.photos || typeof state.photos !== 'object') state.photos = {sent: {}};
+  if(!state.photos.sent) state.photos.sent = {};
+  return state.photos;
+}
+
+// Every photo on this phone, with what it belongs to
+function syncPhotosHere(){
+  const out = [];
+  const add = (ref, info)=>{
+    if(!isPhotoRef(ref)) return;
+    out.push(Object.assign({id: ref.slice(PHOTO_REF.length)}, info));
+  };
+  (lsGet('customers') || []).forEach(c=>{
+    if(!c || !c.id) return;
+    const customerId = String(c.id);
+    (c.equipment || []).forEach(item=>{
+      (item && item.photos || []).forEach(ph=>{
+        if(!ph) return;
+        const ref = ph.ref || (ph.stored && ph.id ? PHOTO_REF + ph.id : null);
+        if(ref) add(ref, {customerId, kind: 'equipment', equipmentId: item.id,
+                          takenAt: ph.takenAt || c.updatedAt || new Date().toISOString()});
+      });
+    });
+    const fromVisit = (r, body)=>{
+      if(!r || !r.id) return;
+      const when = r.date || r.timestamp || new Date().toISOString();
+      add(r.beforePhoto, {customerId, kind: 'before', body, visitId: String(r.id), takenAt: when});
+      add(r.photo, {customerId, kind: 'after', body, visitId: String(r.id), takenAt: when});
+      add(r.afterPhoto, {customerId, kind: 'after', body, visitId: String(r.id), takenAt: when});
+      add(r.gatePhoto, {customerId, kind: 'gate', body, visitId: String(r.id), takenAt: when});
+      Object.keys(r.customPhotos || {}).forEach(k=>{
+        add(r.customPhotos[k], {customerId, kind: 'custom', body, visitId: String(r.id), takenAt: when});
+      });
+    };
+    (lsGet(readingsStorageKey(customerId, 'pool')) || []).forEach(r => fromVisit(r, 'pool'));
+    (lsGet(readingsStorageKey(customerId, 'spa')) || []).forEach(r => fromVisit(r, 'spa'));
+    (c.fountains || []).forEach(f=>{
+      if(!f || !f.id) return;
+      (lsGet(fountainReadingsStorageKey(customerId, f.id)) || []).forEach(r => fromVisit(r, 'fountain:' + f.id));
+    });
+    (lsGet(skippedVisitsStorageKey(customerId)) || []).forEach(sk => fromVisit(sk, 'pool'));
+  });
+  return out;
+}
+
+function syncDataUrlToBlob(dataUrl){
+  const at = String(dataUrl).indexOf(',');
+  const head = String(dataUrl).slice(0, at);
+  const type = (head.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const raw = atob(String(dataUrl).slice(at + 1));
+  const bytes = new Uint8Array(raw.length);
+  for(let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return {blob: new Blob([bytes], {type}), type, size: bytes.length};
+}
+
+async function syncPushPhotos(state){
+  const ph = syncPhotoState(state);
+  const company = deviceGet('company');
+  if(!company) return {ok: true, pushed: 0};
+  const waiting = syncPhotosHere().filter(p => !ph.sent[p.id]);
+  let pushed = 0, refused = 0;
+  for(const item of waiting.slice(0, SYNC_PHOTOS_PER_RUN)){
+    const data = await loadPhotoData(item.id);
+    if(!data){ ph.sent[item.id] = {gone: true}; saveFieldSyncState(state); continue; }
+    const path = company.id + '/' + item.customerId + '/' + item.id;
+    let file;
+    try{ file = syncDataUrlToBlob(data); }catch(e){ ph.sent[item.id] = {gone: true}; continue; }
+
+    const s = deviceGet('session');
+    let res;
+    try{
+      const r = await fetch(FIELD_SUPABASE_URL + '/storage/v1/object/' + SYNC_PHOTO_BUCKET + '/' + path, {
+        method: 'POST',
+        // No overwrite flag: that turns the upload into an update, which the
+        // bucket rules do not allow, and every photo was refused because of it.
+        // A photo sent twice comes back as "already there", which is fine.
+        headers: {'apikey': FIELD_SUPABASE_KEY,
+                  'Authorization': 'Bearer ' + (s && s.access_token),
+                  'Content-Type': file.type},
+        body: file.blob
+      });
+      let why = '', already = r.status === 409;
+      if(!r.ok && !already){
+        try{
+          const b = await r.json();
+          why = b.message || b.error || '';
+          // Storage reports a file that is already there as a plain 400 with
+          // this message, which is not a failure: the photo is where it belongs
+          if(String(b.statusCode) === '409' || /already exists/i.test(why)) already = true;
+        }catch(e){}
+      }
+      res = {ok: r.ok, status: r.status, why: why, already: already};
+    }catch(e){
+      return {ok: false, offline: true, pushed: pushed};
+    }
+    if(res.status === 401){
+      // The session needed refreshing; the next run picks this up
+      const again = await fieldRefresh();
+      return {ok: again === true, offline: again === 'offline', pushed: pushed};
+    }
+    if(!res.ok && !res.already){
+      return {ok: false, pushed: pushed,
+              why: 'the office refused the file (' + res.status + (res.why ? ': ' + res.why : '') + ')'};
+    }
+
+    const noted = await fieldAuthed('/rest/v1/rpc/push_photo', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_id: item.id, p_customer_id: item.customerId, p_kind: item.kind,
+        p_body: item.body || null, p_visit_id: item.visitId || null,
+        p_equipment_id: item.equipmentId || null, p_path: path,
+        p_bytes: file.size, p_taken_at: item.takenAt,
+        p_service_date: syncVisitServiceDate(item.takenAt)
+      })
+    });
+    if(noted.offline) return {ok: false, offline: true, pushed: pushed};
+    if(noted.status === 400 || noted.status === 403){
+      // The office will not have it — a customer it does not know, say
+      ph.sent[item.id] = {refused: true};
+      refused++;
+      saveFieldSyncState(state);
+      continue;
+    }
+    if(!noted.ok || !noted.body || !noted.body.result){
+      const msg = noted.body && (noted.body.message || noted.body.msg);
+      return {ok: false, pushed: pushed,
+              why: 'the office would not record it (' + (noted.status || '?') + (msg ? ': ' + msg : '') + ')'};
+    }
+    ph.sent[item.id] = {path: path, at: new Date().toISOString()};
+    pushed++;
+    saveFieldSyncState(state);      // one at a time, so a dropped signal resumes
+  }
+  return {ok: true, pushed: pushed, refused: refused, more: waiting.length > SYNC_PHOTOS_PER_RUN};
+}
+
+// After 30 days the phone lets its own copy go. The office has it, and it can
+// be fetched back if a report needs it.
+async function syncCleanUploadedPhotos(state){
+  const ph = syncPhotoState(state);
+  const cutoff = Date.now() - SYNC_PHOTO_KEEP_DAYS * 86400000;
+  let freed = 0;
+  for(const id of Object.keys(ph.sent)){
+    const rec = ph.sent[id];
+    if(!rec || !rec.path || rec.local === false) continue;
+    if(new Date(rec.at).getTime() > cutoff) continue;
+    await deletePhotoData(id);
+    rec.local = false;
+    freed++;
+  }
+  if(freed) saveFieldSyncState(state);
+  return freed;
+}
+
+// Fetch one back from the office, for a report or to look at
+async function syncFetchPhoto(id){
+  const state = loadFieldSyncState();
+  let rec = syncPhotoState(state).sent[id];
+  const s = deviceGet('session');
+
+  // A photo this phone did not upload itself has no record here — one taken on
+  // another phone, or one that arrived with a reading from the office. Ask the
+  // office where the file is rather than giving up on it.
+  if(!rec || !rec.path){
+    try{
+      const look = await fetch(FIELD_SUPABASE_URL + '/rest/v1/photos?select=path&id=eq.'
+        + encodeURIComponent(id) + '&limit=1', {
+        headers: {'apikey': FIELD_SUPABASE_KEY, 'Authorization': 'Bearer ' + (s && s.access_token)}
+      });
+      if(look.ok){
+        const rows = await look.json();
+        if(Array.isArray(rows) && rows[0] && rows[0].path) rec = {path: rows[0].path};
+      }
+    }catch(e){}
+  }
+  if(!rec || !rec.path) return null;
+  try{
+    const r = await fetch(FIELD_SUPABASE_URL + '/storage/v1/object/' + SYNC_PHOTO_BUCKET + '/' + rec.path, {
+      headers: {'apikey': FIELD_SUPABASE_KEY, 'Authorization': 'Bearer ' + (s && s.access_token)}
+    });
+    if(!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise((resolve)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(reader.result);
+      reader.onerror = ()=> resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  }catch(e){ return null; }
+}
+
+async function fieldSync(){
+  const company = deviceGet('company');
+  const membership = deviceGet('membership');
+  if(!company || !membership || !deviceGet('session') || !fieldCurrentUser()) return {ok: false, reason: 'signed-out'};
+  if(syncRunning){ syncAgain = true; return {ok: false, reason: 'busy'}; }
+  syncRunning = true;
+  const result = {ok: false, records: 0, customers: 0, pushed: 0};
+  try{
+    if(deviceGet('wipe')){
+      await fieldFinishWipe();
+      return {ok: true, reason: 'clearing'};
+    }
+    const state = loadFieldSyncState();
+
+    // Safeguard: a copy of everything on this phone before its first sync
+    if(!state.pulledOnce && !state.backupAt){
+      try{
+        state.backupAt = await fieldFirstSyncBackup(company.id);
+        saveFieldSyncState(state);
+      }catch(e){ result.reason = 'backup-failed'; return result; }
+    }
+
+    syncScanCustomers(state);
+    syncScanWork(state);          // notice ticks and moves before anything is pulled
+    saveFieldSyncState(state);
+
+    const records = await syncPullRecords(state);
+    if(!records.ok){ result.reason = records.offline ? 'offline' : 'pull-failed'; saveFieldSyncState(state); return result; }
+    result.records = records.applied;
+
+    const pulled = await syncPullCustomers(state);
+    if(!pulled.ok){ result.reason = pulled.offline ? 'offline' : 'pull-failed'; saveFieldSyncState(state); return result; }
+    // It reached the office: whatever happens next, that much is true
+    state.lastReachedAt = new Date().toISOString();
+    saveFieldSyncState(state);
+    result.customers = pulled.count;
+
+    // Nothing goes up until a full pull has finished on this phone
+    state.pulledOnce = true;
+    saveFieldSyncState(state);
+    // Only when something actually arrived: redrawing on every sync closed
+    // whatever panel was open under the person using it
+    if(pulled.changed) syncRedrawRoute();
+
+    syncScanCustomers(state);
+    const pushedResult = await syncPushCustomers(state);
+    result.pushed = pushedResult.pushed || 0;
+    if(!pushedResult.ok){ result.reason = pushedResult.offline ? 'offline' : 'push-failed'; saveFieldSyncState(state); return result; }
+
+    // Tasks ticked off and visits moved here
+    const work = await syncPushWork(state);
+    result.work = work.pushed || 0;
+    saveFieldSyncState(state);
+    if(!work.ok){ result.reason = work.offline ? 'offline' : 'push-failed'; state.lastTrouble = 'a change made here could not be sent'; saveFieldSyncState(state); setTimeout(fieldRenderSyncCard, 0); return result; }
+
+    // Readings and skips recorded here
+    const visits = await syncPushVisits(state);
+    result.visits = visits.pushed || 0;
+    result.visitsRefused = visits.refused || 0;
+    saveFieldSyncState(state);
+    if(!visits.ok){ result.reason = visits.offline ? 'offline' : 'push-failed'; state.lastTrouble = 'a visit could not be sent'; saveFieldSyncState(state); setTimeout(fieldRenderSyncCard, 0); return result; }
+    if(visits.more) setTimeout(()=> fieldSync(), 1500);   // more to send, a batch at a time
+
+    // Photos, after the visits they belong to
+    const photos = await syncPushPhotos(state);
+    result.photos = photos.pushed || 0;
+    saveFieldSyncState(state);
+    if(!photos.ok){
+      result.reason = photos.offline ? 'offline' : 'push-failed';
+      state.lastTrouble = 'a photo could not be sent' + (photos.why ? ' — ' + photos.why : '');
+      saveFieldSyncState(state);
+      setTimeout(fieldRenderSyncCard, 0);
+      return result;
+    }
+    if(photos.more) setTimeout(()=> fieldSync(), 2500);
+    try{ await syncCleanUploadedPhotos(state); }catch(e){}
+
+    state.lastSyncedAt = new Date().toISOString();
+    state.lastTrouble = null;                 // everything went up and came down
+    setTimeout(fieldRenderSyncCard, 0);
+    saveFieldSyncState(state);
+    result.ok = true;
+    return result;
+  }catch(e){
+    result.reason = 'error';
+    return result;
+  }finally{
+    syncRunning = false;
+    if(syncAgain){ syncAgain = false; setTimeout(()=> fieldSync(), 0); }
+  }
+}
+
+// A visit finishing, or anything else that changes a customer here
+// True while sync is writing what it just brought down. Those writes are not
+// somebody's change, so they must not schedule another sync — that looped every
+// couple of seconds, redrawing the route under whoever was using it.
+let syncApplyingRemote = false;
+
+// Redrawing the route closes anything open on top of it — the panel that opens
+// when a customer is tapped, or a dropdown being picked from. The redraw waits
+// until that is finished with.
+let syncRouteRedrawWanted = false;
+
+function syncSomethingIsOpen(){
+  const el = document.activeElement;
+  if(el && ['SELECT', 'INPUT', 'TEXTAREA'].indexOf(el.tagName) !== -1) return true;
+  if(document.querySelector('.route-brief')) return true;
+  if(document.querySelector('.confirm-overlay')) return true;
+  return false;
+}
+
+function syncRedrawRoute(){
+  if(syncSomethingIsOpen()){ syncRouteRedrawWanted = true; return; }
+  try{ if(typeof renderHomeList === 'function') renderHomeList(); }catch(e){}
+}
+
+['focusout', 'change', 'click'].forEach(evt=>{
+  document.addEventListener(evt, ()=>{
+    if(!syncRouteRedrawWanted) return;
+    setTimeout(()=>{
+      if(!syncRouteRedrawWanted || syncSomethingIsOpen()) return;
+      syncRouteRedrawWanted = false;
+      try{ if(typeof renderHomeList === 'function') renderHomeList(); }catch(e){}
+    }, 0);
+  }, true);
+});
+
+function fieldNoteLocalChange(){
+  if(syncApplyingRemote) return;
+  if(!deviceGet('session')) return;
+  try{
+    const state = loadFieldSyncState();
+    syncScanCustomers(state);
+    saveFieldSyncState(state);
+  }catch(e){}
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(()=> fieldSync(), 2000);
+}
+
+function startFieldSync(){
+  fieldSync();
+  fieldRenderSyncCard();
+  if(!startFieldSync.wired){
+    startFieldSync.wired = true;
+    setInterval(fieldRenderSyncCard, 20000);
+    const btn = document.getElementById('btnSyncNow');
+    if(btn) btn.addEventListener('click', async ()=>{
+      btn.disabled = true;
+      fieldSyncStatus('Syncing\u2026');
+      await fieldSync();
+      fieldRenderSyncCard();
+      btn.disabled = false;
+    });
+  }
+  if(!startFieldSync.started){
+    startFieldSync.started = true;
+    setInterval(()=>{ if(!document.hidden) fieldSync(); }, SYNC_INTERVAL_MS);
+    window.addEventListener('online', ()=> fieldSync());
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) fieldSync(); });
+  }
+}
+
+// Check the account now and whenever signal returns or the app comes back to
+// the front. onGone(reason) runs after the phone has been signed out.
+function fieldWatchAccount(needAdmin, onGone){
+  const run = ()=> fieldCheckAccount(needAdmin, onGone);
+  run();
+  if(!fieldWatchAccount.started){
+    fieldWatchAccount.started = true;
+    window.addEventListener('online', run);
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) run(); });
+  }
+}
 
 
 // How close storage is to full, so it can be shown before it becomes a problem
@@ -2536,7 +4361,20 @@ function isPhotoRef(v){
 
 async function resolvePhoto(v){
   if(!v) return null;
-  if(isPhotoRef(v)) return await loadPhotoData(v.slice(PHOTO_REF.length));
+  if(isPhotoRef(v)){
+    const id = v.slice(PHOTO_REF.length);
+    const here = await loadPhotoData(id);
+    if(here) return here;
+    // Let go after 30 days: fetch it back from the office
+    if(typeof syncFetchPhoto === 'function'){
+      const fromOffice = await syncFetchPhoto(id);
+      if(fromOffice){
+        try{ await savePhotoData(id, fromOffice); }catch(e){}
+        return fromOffice;
+      }
+    }
+    return null;
+  }
   return v;                                  // still held inline
 }
 
@@ -2915,6 +4753,26 @@ function techRequires(flag){
   return !!(currentUser && currentUser[flag] === true);
 }
 
+// Set for this technician on the website: before or after photos, for each
+// body of water. The body of water is 'pool', 'spa' or 'fountain'.
+function techWantsPhoto(step, type){
+  const rules = currentUser && currentUser.photoRules;
+  if(!rules || !rules[step]) return false;
+  const key = type === 'spa' ? 'spa' : (type === 'pool' ? 'pool' : 'fountain');
+  return rules[step][key] === true;
+}
+
+// Which of the company's own photos this technician must take here
+function customPhotosRequiredOf(type, when){
+  return customPhotosFor(type).filter(p =>{
+    if(p.required !== true) return false;
+    const at = p.when && typeof p.when === 'object'
+      ? !!p.when[when]
+      : (p.when === 'before' ? 'before' : 'after') === when;
+    return at && techWantsPhoto(p.id, type);
+  });
+}
+
 // A customer configured to need a gate photo still needs one when the
 // app-wide setting is switched off.
 function customerWantsGatePhoto(){
@@ -2972,7 +4830,7 @@ function syncGatePhotoBlock(){
 
   // The whole step can be switched off in Settings, in which case it never
   // appears regardless of any requirement set elsewhere.
-  const stepOn = appSettings.showGatePhoto !== false;
+  const stepOn = true;   // the gate step always exists; the requirement decides who takes it
   const show = stepOn && gatePhotoApplies() && isLastSectionOfVisit();
   block.style.display = show ? 'block' : 'none';
   if(!show) return;
@@ -3006,6 +4864,10 @@ function afterPhotoRequiredFor(type){
   const lists = cid
     ? listsForBody(cid, type === 'fountain' ? currentVisitFountainId : type, type)
     : chemConfig[type];
+  // Asked of this technician on the website: that stands whatever the body of
+  // water says, because it was set for them by name
+  if(techWantsPhoto('after', type)) return true;
+
   if(lists && typeof lists.requireAfterPhoto === 'boolean') return lists.requireAfterPhoto;
 
   // Not set for this body of water means not required. There is no app-wide
@@ -3966,6 +5828,7 @@ function resetCustomerForm(){
   ['ncName','ncAddress','ncCity','ncState','ncZip','ncEmail','ncPhone','ncPoolGallons','ncNeighborhoodGateCode','ncGateCode','ncAccessNotes']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('ncDay').value = 'Monday';
+  renderNcDayButtons();
   document.getElementById('ncHasPool').checked = true;
   document.getElementById('ncHasSpa').checked = false;
   populateNcTechnicianSelect();
@@ -3974,6 +5837,29 @@ function resetCustomerForm(){
   ncDogs = []; renderNcDogFields();
   document.getElementById('newCustomerHeading').textContent = 'New customer';
   document.getElementById('btnSaveCustomer').textContent = 'Save customer';
+}
+
+// The day buttons under Service day, with the chosen one filled in
+function renderNcDayButtons(){
+  const wrap = document.getElementById('ncDayButtons');
+  const field = document.getElementById('ncDay');
+  if(!wrap || !field) return;
+  wrap.innerHTML = '';
+  DAYS_OF_WEEK.forEach(day=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-ghost';
+    btn.dataset.day = day;
+    btn.textContent = day.slice(0, 3);
+    const on = (field.value || 'Monday') === day;
+    btn.style.cssText = 'width:auto;padding:8px 12px;font-size:13px;flex:0 0 auto;'
+      + (on ? 'background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);' : '');
+    btn.addEventListener('click', ()=>{
+      field.value = day;
+      renderNcDayButtons();
+    });
+    wrap.appendChild(btn);
+  });
 }
 
 function showCustomerForm(){
@@ -4005,7 +5891,7 @@ function renderClipSection(){
 // For a technician showing the office something a photo cannot explain — a pump
 // making a noise, water tracking to a leak. Recorded in the app, then handed to
 // the phone's own share sheet, so it goes wherever they normally send things.
-// Nothing is stored in PoolLog: passing a clip from a phone to the office needs
+// Nothing is stored in Weir: passing a clip from a phone to the office needs
 // a server, and that is backend work.
 const CLIP_MAX_SECONDS = 15;
 
@@ -4040,7 +5926,7 @@ async function recordClip(){
       audio: true            // a noise is often the whole point
     });
   }catch(e){
-    await alertDialog('The camera could not be opened. Check PoolLog is allowed to use '
+    await alertDialog('The camera could not be opened. Check Weir is allowed to use '
       + 'the camera and microphone.', 'No camera');
     return null;
   }
@@ -4110,7 +5996,7 @@ async function recordClip(){
         const blob = new Blob(chunks, {type: blobType});
         if(!blob.size){ finish(null); return; }
         const stamp = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
-        finish(new File([blob], 'poollog-' + stamp + '.' + ext, {type: blobType}));
+        finish(new File([blob], 'weir-' + stamp + '.' + ext, {type: blobType}));
       };
 
       recorder.start();
@@ -4139,10 +6025,10 @@ async function shareClip(file, customer){
   if(!file) return;
 
   const who = customer ? (customer.name || '') : '';
-  const title = who ? 'PoolLog \u2014 ' + who : 'PoolLog clip';
+  const title = who ? 'Weir \u2014 ' + who : 'Weir clip';
   const text = who
     ? who + (customer && customer.address ? ' \u2014 ' + customer.address : '')
-    : 'Clip from PoolLog';
+    : 'Clip from Weir';
 
   try{
     if(navigator.canShare && navigator.canShare({files: [file]})){
@@ -4433,13 +6319,16 @@ function openPhotoFullSize(dataUrl){
   // No button. The whole overlay closes on a tap, so the only thing needed is
   // to say so clearly — at a size that is actually noticed against a
   // full-screen photo.
+  // Styled exactly like the camera's Cancel and Flash buttons, so the two
+  // full-screen views read as the same app rather than two different ones.
   const bar = document.createElement('div');
-  bar.style.cssText = 'flex:0 0 auto;padding:20px calc(20px + env(safe-area-inset-bottom));'
-    + 'text-align:center;background:#000;';
+  bar.style.cssText = 'flex:0 0 auto;padding:18px 20px calc(18px + env(safe-area-inset-bottom));'
+    + 'display:flex;align-items:center;justify-content:center;background:#000;';
 
   const hint = document.createElement('div');
   hint.textContent = 'Tap the photo to close';
-  hint.style.cssText = 'color:#fff;font-size:17px;font-weight:600;letter-spacing:0.01em;'
+  hint.style.cssText = 'flex:0 0 auto;padding:12px 18px;font-size:15px;border:none;'
+    + 'border-radius:10px;background:rgba(255,255,255,0.15);color:#fff;'
     + "font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;pointer-events:none;";
   bar.appendChild(hint);
 
@@ -4484,7 +6373,13 @@ function makePhotoController(ids){
     previewImg.style.minWidth = '96px';
     previewImg.style.cursor = 'zoom-in';
     previewImg.title = 'Tap to see it full size';
-    previewWrap.style.display = 'block';
+    // Centred, and evenly spaced if more than one ends up side by side. A
+    // thumbnail hard against the left edge looked like a mistake.
+    previewWrap.style.display = 'flex';
+    previewWrap.style.justifyContent = 'center';
+    previewWrap.style.alignItems = 'flex-start';
+    previewWrap.style.flexWrap = 'wrap';
+    previewWrap.style.gap = '10px';
     removeBtn.style.display = 'inline-flex';
     if(ids.onChange) ids.onChange();
   }
@@ -4714,6 +6609,7 @@ document.getElementById('btnSaveReading').addEventListener('click', async ()=>{
   poolPhotoController.clear();
   gatePhotoController.clear();
   beforeControllerFor('pool').clear();
+  poolServicePressed = {customerId: null, on: {}};
   ['chkBackwashed','chkSaltCell'].forEach(id=>{
     const el = document.getElementById(id);
     if(el){
@@ -4739,7 +6635,9 @@ document.getElementById('btnSaveSpaReading').addEventListener('click', async ()=
     date: visitTimestamp(),
     notes: document.getElementById('inSpaNotes').value.trim(),
     photo: appSettings.storePhotos === false ? null : (spaPhotoController.getData() || null),
-    beforePhoto: appSettings.storePhotos === false ? null : (beforeControllerFor('spa').getData() || null)
+    beforePhoto: appSettings.storePhotos === false ? null : (beforeControllerFor('spa').getData() || null),
+    // The gate photo belongs to whichever body of water was serviced last
+    gatePhoto: appSettings.storePhotos === false ? null : (gatePhotoController.getData() || null)
   };
   // The fields on screen come from THIS customer's list. Reading the global
   // one meant a customer with a custom setup saved nothing at all.
@@ -4786,7 +6684,9 @@ document.getElementById('btnSaveFountainReading').addEventListener('click', asyn
     date: visitTimestamp(),
     notes: document.getElementById('inFountainNotes').value.trim(),
     photo: appSettings.storePhotos === false ? null : (fountainPhotoController.getData() || null),
-    beforePhoto: appSettings.storePhotos === false ? null : (beforeControllerFor('fountain').getData() || null)
+    beforePhoto: appSettings.storePhotos === false ? null : (beforeControllerFor('fountain').getData() || null),
+    // The gate photo belongs to whichever body of water was serviced last
+    gatePhoto: appSettings.storePhotos === false ? null : (gatePhotoController.getData() || null)
   };
   // The fields on screen come from THIS customer's list. Reading the global
   // one meant a customer with a custom setup saved nothing at all.
@@ -5419,7 +7319,6 @@ function openTechEditor(t){
   document.getElementById('tcName').value = t.name || '';
   document.getElementById('tcEmail').value = t.email || '';
   document.getElementById('tcPhone').value = t.phone || '';
-  document.getElementById('tcRequireGate').checked = t.requireGatePhoto === true;
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
@@ -5432,7 +7331,8 @@ document.getElementById('btnSaveTech').addEventListener('click', ()=>{
     t.name = name;
     t.email = document.getElementById('tcEmail').value.trim();
     t.phone = document.getElementById('tcPhone').value.trim();
-    t.requireGatePhoto = document.getElementById('tcRequireGate').checked;
+    // The gate requirement is set on the website, on the Photo requirements tab
+    // Set on the website, on the Photo requirements tab
     saveAdminTechnicians();
     showToast('Technician updated');
   }
@@ -5739,7 +7639,22 @@ function orderCustomersForDay(day, list){
 // ---------- Route order prompt ----------
 let pendingOrderIds = null;
 let orderBeforeDrag = null;
+// Whose route is being looked at. It starts as the person signed in: being an
+// admin gives access to every customer through the Customers tab, not a route
+// made of everybody. Another technician's day can still be picked from the
+// selector when there is a reason to look.
 let adminViewTechId = '';
+let adminRouteStarted = false;
+
+function adminStartOnOwnRoute(){
+  if(adminRouteStarted) return;
+  const me = (typeof currentUser === 'object' && currentUser) ? currentUser.id : null;
+  if(!me) return;
+  adminRouteStarted = true;
+  adminViewTechId = me;
+  const sel = document.getElementById('adminViewTech');
+  if(sel) sel.value = me;
+}
 
 document.getElementById('adminViewTech').addEventListener('change', (e)=>{
   adminViewTechId = e.target.value;
@@ -6044,6 +7959,31 @@ function tasksForCustomer(customerId){
     (t.customerIds || []).indexOf(customerId) !== -1 || t.customerId === customerId);
 }
 
+// The local calendar date of a stored visit time. Visit times are stored in
+// UTC, so slicing the text would put an evening visit in Arizona on the next day.
+function localDateOfStamp(stamp){
+  const d = new Date(stamp);
+  if(isNaN(d)) return String(stamp || '').slice(0, 10);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Was this customer's visit finished (reported or skipped) on this date? A
+// customer only keeps their latest service date, so an older day is checked
+// against their report and skip history. Reservice clears the latest date,
+// which brings the customer back for that day as it always has.
+function servicedOnDate(c, iso){
+  if(!c || !iso) return false;
+  if(c.lastServicedDate === iso) return true;
+  if(!c.lastServicedDate || iso >= c.lastServicedDate) return false;
+  const onDay = r => r && r.date && localDateOfStamp(r.date) === iso;
+  if((lsGet(readingsStorageKey(c.id, 'pool')) || []).some(onDay)) return true;
+  if((lsGet(readingsStorageKey(c.id, 'spa')) || []).some(onDay)) return true;
+  for(const f of getValidFountains(c)){
+    if((lsGet(fountainReadingsStorageKey(c.id, f.id)) || []).some(onDay)) return true;
+  }
+  return (lsGet(skippedVisitsStorageKey(c.id)) || []).some(s => s && s.date === iso);
+}
+
 function renderHomeList(){
   renderDayTabs();
   renderWeekLabel();
@@ -6072,20 +8012,40 @@ function renderHomeList(){
       o.value = t.id; o.textContent = t.name;
       techSel.appendChild(o);
     });
-    techSel.value = Array.from(techSel.options).some(o => o.value === prev) ? prev : '';
+    if(!adminRouteStarted) adminStartOnOwnRoute();
+    // Whoever is signed in is always an option, even before the technician list
+    // has arrived from the office — otherwise their own route would silently
+    // fall back to everybody's on the first draw
+    const me = (typeof currentUser === 'object' && currentUser) ? currentUser : null;
+    const wanted = adminRouteStarted && prev === '' && adminViewTechId ? adminViewTechId : prev;
+    // Anyone being looked at stays in the list even before the technician list
+    // has arrived from the office; otherwise the choice would silently fall back
+    // to everybody's route
+    [me && me.id ? {id: me.id, name: me.name} : null,
+     wanted ? {id: wanted, name: (lsGet('technicians') || []).reduce((n, t)=> t && t.id === wanted ? (t.name || n) : n, 'Technician')} : null]
+      .forEach(who=>{
+        if(!who || !who.id) return;
+        if(Array.from(techSel.options).some(o => o.value === who.id)) return;
+        const o = document.createElement('option');
+        o.value = who.id;
+        o.textContent = who.name || 'Technician';
+        techSel.appendChild(o);
+      });
+    techSel.value = Array.from(techSel.options).some(o => o.value === wanted) ? wanted : '';
     adminViewTechId = techSel.value;
   }
 
+  // Anyone finished on the day being viewed drops off — today, or any day before
   const baseCustomers = customers
     .filter(c => c.day === selectedHomeDay && c.active !== false)
-    .filter(c => weekOffset !== 0 || c.lastServicedDate !== today)
+    .filter(c => !servicedOnDate(c, selectedDayISO))
     .filter(c => !movedAway.has(c.id))
     .filter(c => !adminViewTechId || c.technicianId === adminViewTechId);
 
   const movedInCustomers = customers.filter(c =>
     movedHere.has(c.id) && c.active !== false &&
     // Once serviced they drop off, exactly as a customer whose regular day it is
-    (weekOffset !== 0 || c.lastServicedDate !== today) &&
+    !servicedOnDate(c, selectedDayISO) &&
     !baseCustomers.some(b => b.id === c.id));
 
   const todaysCustomers = orderCustomersForDay(selectedHomeDay,
@@ -6099,11 +8059,11 @@ function renderHomeList(){
   // The route list hides finished customers, so count those separately.
   const doneToday = customers.filter(cust =>
     cust.active !== false &&
-    cust.lastServicedDate === today &&
-    cust.day === selectedHomeDay
+    cust.day === selectedHomeDay &&
+    servicedOnDate(cust, selectedDayISO)
   ).length;
   const remaining = todaysCustomers.length;
-  const totalStops = remaining + (weekOffset === 0 ? doneToday : 0);
+  const totalStops = remaining + doneToday;
 
   const stopEl = document.getElementById('homeStopCount');
   const stopLabelEl = document.getElementById('homeStopLabel');
@@ -6127,10 +8087,10 @@ function renderHomeList(){
   // Jobs already completed today still count toward the total
   const jobsDone = customers.filter(cust =>
     cust.active !== false &&
-    cust.lastServicedDate === today &&
-    jobIds.has(cust.id)
+    jobIds.has(cust.id) &&
+    servicedOnDate(cust, selectedDayISO)
   ).length;
-  const jobsTotal = jobCount + (weekOffset === 0 ? jobsDone : 0);
+  const jobsTotal = jobCount + jobsDone;
 
   const jobEl = document.getElementById('homeJobCount');
   const jobLabelEl = document.getElementById('homeJobLabel');
@@ -6153,13 +8113,14 @@ function renderHomeList(){
     return;
   }
   container.innerHTML = '';
-  const canReorder = appSettings.allowRouteReorder !== false;
+  // Rearranging is granted to a technician by name on the website, not set for
+  // everyone at once. Admin access carries it.
+  const canReorder = !!(currentUser && (currentUser.canReorderRoute === true || currentUser.isAdmin === true));
   todaysCustomers.forEach((c, idx)=>{
     const row = document.createElement('div');
     row.className = 'cust-row';
     row.style.flexWrap = 'nowrap';
     row.innerHTML = `<div style="display:flex;align-items:center;min-width:0;flex:1 1 auto;">
-        <div style="flex-shrink:0;width:26px;text-align:center;margin-right:8px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--muted);">${idx + 1}</div>
         <div style="min-width:0;flex:1 1 auto;"><div class="cust-name">${c.name}</div><div class="cust-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.address || 'No address on file'}</div></div>
       </div>`;
 
@@ -6197,7 +8158,9 @@ function renderHomeList(){
     onWayBtn.textContent = 'On my way';
     onWayBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
-      sendOnMyWay(c);
+      // Through the chooser, so a customer set to email gets one from the
+      // office rather than a text being opened on this phone
+      dispatchHeadsUp(c);
     });
     rightWrap.appendChild(onWayBtn);
     const chev = document.createElement('div');
@@ -6342,9 +8305,10 @@ function renderServicedList(){
   const servicedCustomers = customers
     .filter(c => c.lastServicedDate === today && c.active !== false)
     .slice()
-    // In the order they were submitted; anything logged before this was tracked
-    // has no timestamp, so it sits first rather than disappearing
-    .sort((a,b)=> (a.lastServicedAt || '').localeCompare(b.lastServicedAt || ''));
+    // Most recently serviced at the top, the longest ago at the bottom. Anything
+    // logged before visit times were tracked has none, so it sits at the very
+    // bottom rather than disappearing.
+    .sort((a,b)=> (b.lastServicedAt || '').localeCompare(a.lastServicedAt || ''));
   if(servicedCustomers.length === 0){
     container.innerHTML = '<div class="empty">No one\'s been serviced yet today.</div>';
     return;
@@ -6648,14 +8612,95 @@ async function checkHeadsUpAfter(finishedCustomerId){
 // a browser cannot send one without the technician pressing send. When emails
 // send from a backend this is the only function that has to change: swap the
 // sendOnMyWay call for the email send and everything else stays as it is.
-const HEADS_UP_METHOD = 'text';        // 'text' today, 'email' once there is a backend
+// How each customer wants their heads-up. A customer with 'email' chosen, or
+// with an address and no phone, gets one sent by the office; everyone else
+// gets the text the technician sends from their own phone, which costs nothing
+// and is what most people prefer anyway.
+function headsUpRouteFor(customer){
+  const wants = (customer.notifyBy || '').trim();
+  if(wants === 'email' || wants === 'text') return wants;
+  // An email address wins: the office sends it, so it goes whether or not this
+  // phone has signal, and nobody has to press send. A text is the fallback for
+  // a customer with no address on file.
+  const email = ((customer.notifyEmail || '').trim() || customer.email || '').trim();
+  if(email && email.indexOf('@') !== -1) return 'email';
+  return 'text';
+}
 
-function dispatchHeadsUp(customer){
-  if(HEADS_UP_METHOD === 'email'){
-    // Not reachable yet — left here so the switch is one line, not a rewrite
-    if(typeof sendHeadsUpEmail === 'function'){ sendHeadsUpEmail(customer); return; }
+async function dispatchHeadsUp(customer){
+  if(headsUpRouteFor(customer) === 'email'){
+    const sent = await sendHeadsUpEmail(customer);
+    if(sent) return;
+    // The office could not send it: the technician still has a way to tell them
   }
   sendOnMyWay(customer);
+}
+
+// Sent from the office, as "<the company> via Weir", so it arrives whether or
+// not this phone has signal a moment later.
+async function sendHeadsUpEmail(customer){
+  const toName = (customer.notifyName || '').trim() || customer.name;
+  const toEmail = ((customer.notifyEmail || '').trim() || customer.email || '').trim();
+  if(!toEmail || toEmail.indexOf('@') === -1) return false;
+
+  const session = deviceGet('session');
+  if(!session || !session.access_token){
+    noteLastHeadsUp('the old way', 'this phone needs signing in again');
+    return false;
+  }
+
+  const bodies = customer.hasSpa ? 'pool and spa' : 'pool';
+  const text = 'Hi ' + toName + ', just a heads up that I am on my way to service the '
+    + bodies + ' today. See you shortly.';
+  const html = '<!DOCTYPE html><html><body style="margin:0;background:#F4F7F6;">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+    + 'style="background:#F4F7F6;padding:24px 0;"><tr><td align="center">'
+    + '<table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" '
+    + 'style="width:520px;max-width:100%;background:#fff;border-radius:14px;overflow:hidden;'
+    + 'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">'
+    + '<tr><td style="padding:26px 26px 6px;">'
+    + '<div style="font-size:19px;font-weight:700;color:#16302E;">On my way</div></td></tr>'
+    + '<tr><td style="padding:10px 26px 26px;font-size:15px;line-height:1.6;color:#334444;">'
+    + escapeHtmlForEmail(text) + '</td></tr>'
+    + '</table></td></tr></table></body></html>';
+
+  try{
+    const res = await fetch(FIELD_SUPABASE_URL + '/functions/v1/send-report', {
+      method: 'POST',
+      headers: {'apikey': FIELD_SUPABASE_KEY,
+                'Authorization': 'Bearer ' + session.access_token,
+                'Content-Type': 'application/json'},
+      body: JSON.stringify({to: toEmail, subject: 'On my way', html: html, customerId: customer.id})
+    });
+    if(res.status === 401){
+      const again = await fieldRefresh();
+      if(again === true) return sendHeadsUpEmail(customer);
+      noteLastHeadsUp('the old way', 'this phone needs signing in again');
+      return false;
+    }
+    if(!res.ok){
+      const body = await res.json().catch(()=> ({}));
+      noteLastHeadsUp('the old way', body.error || ('the office said ' + res.status));
+      return false;
+    }
+    noteLastHeadsUp('office', '');
+    showToast('Heads-up sent to ' + toName);
+    return true;
+  }catch(e){
+    noteLastHeadsUp('the old way', 'no connection when it was sent');
+    return false;
+  }
+}
+
+function escapeHtmlForEmail(t){
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function noteLastHeadsUp(by, why){
+  try{
+    deviceSet('lastHeadsUp', {at: new Date().toISOString(), by: by, why: why || ''});
+    setTimeout(fieldRenderSyncCard, 0);
+  }catch(e){}
 }
 
 function sendOnMyWay(customer){
@@ -6764,6 +8809,7 @@ function openCustomerEditor(customer){
   document.getElementById('ncEmail').value = customer.email || '';
   document.getElementById('ncPhone').value = customer.phone || '';
   document.getElementById('ncDay').value = customer.day || 'Monday';
+  renderNcDayButtons();
   document.getElementById('ncHasPool').checked = customer.hasPool !== false;
   document.getElementById('ncHasSpa').checked = !!customer.hasSpa;
   document.getElementById('ncPoolGallons').value = customer.poolGallons || '';
@@ -6849,7 +8895,7 @@ document.getElementById('importBackupInput').addEventListener('change', async (e
     renderHomeList();
     showToast('Backup restored');
   }catch(err){
-    showToast('Could not read that file — is it a PoolLog backup?');
+    showToast('Could not read that file — is it a Weir backup?');
   }
   e.target.value = '';
 });
@@ -7212,32 +9258,12 @@ document.getElementById('settingPushToTalk').addEventListener('change', (e)=>{
 
 
 
-document.getElementById('settingGatePhoto').addEventListener('change', (e)=>{
-  appSettings.showGatePhoto = e.target.checked;
-  // Deliberately does NOT switch the requirement on. The app-wide setting is
-  // inherited by every body of water whose own tick is not set, so forcing it
-  // on here made spa and fountain demand a photo while their boxes looked
-  // unticked. An unticked box means "follow Settings", not "no".
-  saveSettings();
-  showToast(appSettings.showGatePhoto ? 'Gate photo step turned on' : 'Gate photo step turned off');
-});
 
 
 
 
-document.getElementById('settingRequireSkipReason').addEventListener('change', (e)=>{
-  appSettings.requireSkipReason = e.target.checked;
-  saveSettings();
-  showToast(appSettings.requireSkipReason ? 'Skip reasons are now required' : 'Skip reasons no longer required');
-});
 
 
-document.getElementById('settingRouteReorder').addEventListener('change', (e)=>{
-  appSettings.allowRouteReorder = e.target.checked;
-  saveSettings();
-  renderHomeList();
-  showToast(appSettings.allowRouteReorder ? 'Technicians can rearrange routes' : 'Route order is now locked');
-});
 
 document.getElementById('settingTechniciansTab').addEventListener('change', (e)=>{
   appSettings.showTechniciansTab = e.target.checked;
@@ -7248,34 +9274,6 @@ document.getElementById('settingTechniciansTab').addEventListener('change', (e)=
     if(active && active.id === 'view-technicians') switchView('home');
   }
   showToast(appSettings.showTechniciansTab ? 'Technicians tab turned on' : 'Technicians tab turned off');
-});
-
-document.getElementById('settingAfterPhotos').addEventListener('change', (e)=>{
-  appSettings.showAfterPhotos = e.target.checked;
-  // Deliberately does NOT switch the requirement on. The app-wide setting is
-  // inherited by every body of water whose own tick is not set, so forcing it
-  // on here made spa and fountain demand a photo while their boxes looked
-  // unticked. An unticked box means "follow Settings", not "no".
-  saveSettings();
-  if(currentVisibleSection){
-    currentVisitStep = 1;
-    applyVisitStep({keepScroll: true});
-  }
-  showToast(appSettings.showAfterPhotos ? 'After photos step turned on' : 'After photos step turned off');
-});
-
-document.getElementById('settingBeforePhotos').addEventListener('change', (e)=>{
-  appSettings.showBeforePhotos = e.target.checked;
-  // Deliberately does NOT switch the requirement on. The app-wide setting is
-  // inherited by every body of water whose own tick is not set, so forcing it
-  // on here made spa and fountain demand a photo while their boxes looked
-  // unticked. An unticked box means "follow Settings", not "no".
-  saveSettings();
-  if(currentVisibleSection){
-    currentVisitStep = 1;
-    applyVisitStep({keepScroll: true});
-  }
-  showToast(appSettings.showBeforePhotos ? 'Before photos step turned on' : 'Before photos step turned off');
 });
 
 
@@ -7361,6 +9359,13 @@ function sectionLabel(customer, sectionId){
 }
 
 
+// Which service buttons are pressed on the visit open now. Kept here, not only
+// on the buttons, because the buttons are rebuilt whenever the report is
+// reopened — leaving for another tab and coming back used to un-press them, so
+// the visit saved as not done, the report left it out and "last done" never
+// moved. Cleared when the pool is saved or the report is cancelled.
+let poolServicePressed = {customerId: null, on: {}};
+
 // Equipment-specific service toggles on the pool's After photos step.
 // Backwash only shows for sand filters; salt cell cleaning only for salt cells.
 async function renderPoolServiceChecks(customer){
@@ -7400,10 +9405,6 @@ async function renderPoolServiceChecks(customer){
     return 'Last done ' + when + ' · ' + days + ' days ago';
   }
 
-  const eyebrow = document.createElement('div');
-  eyebrow.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;";
-  eyebrow.textContent = 'Service performed';
-  box.appendChild(eyebrow);
 
   // Both sit on one line, each button above its own "last done" note, so two
   // of them cost about the height of one.
@@ -7420,18 +9421,24 @@ async function renderPoolServiceChecks(customer){
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.id = ch.id;
-    btn.dataset.on = 'false';
+    const wasOn = !!customer && poolServicePressed.customerId === customer.id
+      && poolServicePressed.on[ch.id] === true;
+    btn.dataset.on = wasOn ? 'true' : 'false';
     btn.textContent = ch.label;
     const off = 'background:#fff;color:var(--teal-deep);border:1.5px solid var(--teal-mid);';
     const on  = 'background:var(--teal-deep);color:#fff;border:1.5px solid var(--teal-deep);';
     const base = 'width:100%;padding:10px 12px;border-radius:10px;font-size:13.5px;font-weight:600;'
       + "font-family:'Inter',sans-serif;cursor:pointer;"
       + 'transition:background-color .15s ease,color .15s ease;';
-    btn.style.cssText = base + off;
+    btn.style.cssText = base + (wasOn ? on : off);
     btn.addEventListener('click', ()=>{
       const nowOn = btn.dataset.on !== 'true';
       btn.dataset.on = nowOn ? 'true' : 'false';
       btn.style.cssText = base + (nowOn ? on : off);
+      if(poolServicePressed.customerId !== customer.id){
+        poolServicePressed = {customerId: customer.id, on: {}};
+      }
+      poolServicePressed.on[ch.id] = nowOn;
     });
     cell.appendChild(btn);
 
@@ -7447,6 +9454,24 @@ async function renderPoolServiceChecks(customer){
   box.appendChild(row);
 
   box.style.display = 'block';
+}
+
+// Slides the selected body of water to the left edge of the strip, so the one
+// being worked on is the first thing read and whatever follows it is visible.
+// With four or five bodies the selected tab could otherwise sit off screen.
+function scrollSelectedSectionIntoView(){
+  const container = document.getElementById('visitSectionButtons');
+  if(!container) return;
+  const btn = container.querySelector('[data-selected-tab="1"]');
+  if(!btn) return;
+  // Nothing to scroll — leave it alone rather than nudging a strip that fits
+  if(container.scrollWidth <= container.clientWidth + 1) return;
+  const left = Math.max(0, btn.offsetLeft - container.offsetLeft - 4);
+  try{
+    container.scrollTo({left: left, behavior: 'smooth'});
+  }catch(e){
+    container.scrollLeft = left;   // older browsers
+  }
 }
 
 function renderVisitSectionButtons(){
@@ -7479,6 +9504,7 @@ function renderVisitSectionButtons(){
       btn.style.color = '#fff';
       btn.style.borderColor = colour.text;
       btn.style.boxShadow = 'var(--shadow-sm)';
+      btn.dataset.selectedTab = '1';
     } else {
       btn.style.background = done ? colour.bg : 'transparent';
       btn.style.color = colour.text;
@@ -7542,6 +9568,9 @@ function renderVisitSectionButtons(){
   if(pendingVisit.neededSections.length === 0){
     container.innerHTML = '<p style="font-size:12.5px;color:var(--muted);">This customer has no pool, spa, or fountains on file yet — add those from the Customer tab.</p>';
   }
+
+  // After a moment, so the strip has been laid out and its widths are real
+  setTimeout(scrollSelectedSectionIntoView, 0);
 }
 
 function hideAllVisitSections(){
@@ -7637,12 +9666,15 @@ function missingRequiredPhoto(){
     afterWhy = lists.requireAfterPhoto ? 'this list\u2019s own setting' : '';
   }
 
+  // Asked of this technician by name on the website. It is the stricter rule,
+  // so it wins, and the message says where it came from.
+  if(showsBeforePhotoStep(type) && techWantsPhoto('before', type)) beforeWhy = 'asked of you by the office';
+  if(showsAfterPhotoStep(type) && techWantsPhoto('after', type)) afterWhy = 'asked of you by the office';
+
   const beforeNeeded = !!beforeWhy;
   const afterNeeded = !!afterWhy;
 
-  if(here === 'visit' + cap + 'BeforePhotoSection'
-     && appSettings.showBeforePhotos !== false
-     && beforeNeeded){
+  if(here === 'visit' + cap + 'BeforePhotoSection' && beforeNeeded){
     const ctrl = beforeControllerFor(type);
     if(ctrl && !ctrl.getData()) return 'A before photo is required here (' + beforeWhy + ')';
   }
@@ -7654,7 +9686,6 @@ function missingRequiredPhoto(){
 
   if(here.indexOf(cap + 'PhotoSection') !== -1
      && here.indexOf('Before') === -1
-     && appSettings.showAfterPhotos !== false
      && afterNeeded){
     const ctrl = type === 'pool' ? poolPhotoController
       : (type === 'spa' ? spaPhotoController : fountainPhotoController);
@@ -7730,11 +9761,13 @@ function flagMissingReadings(missing){
 // button appear. The require settings never affect this — they only decide
 // whether a photo must be taken before submitting.
 function showsAfterPhotoStep(type){
-  return appSettings.showAfterPhotos !== false;
+  return true;
 }
 
+// The photo steps always exist. Who has to take which is set on the website,
+// on the Photo requirements tab, and nowhere else.
 function showsBeforePhotoStep(type){
-  return appSettings.showBeforePhotos !== false;
+  return true;
 }
 
 function visitStepCardsFor(type){
@@ -7769,9 +9802,7 @@ function applyVisitStep(opts){
   const steps = visitStepCardsFor(currentVisibleSection);
   if(!steps) return;
   document.querySelectorAll('[data-final-step-label]').forEach(btn=>{
-    btn.textContent = appSettings.showAfterPhotos !== false
-      ? 'After Photos \u2192'
-      : finishBodyLabel();
+    btn.textContent = 'After Photos \u2192';
   });
   steps.forEach((entry, i)=>{
     const ids = Array.isArray(entry) ? entry : [entry];
@@ -7957,16 +9988,36 @@ function syncStepChrome(){
   });
 
   // Sit the heading and the button on one line
+  let head;
   if(h.parentElement && h.parentElement.dataset.stepHead === 'true'){
-    h.parentElement.appendChild(back);
+    head = h.parentElement;
+    head.appendChild(back);
   } else {
-    const wrap = document.createElement('div');
-    wrap.dataset.stepHead = 'true';
-    wrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;'
+    head = document.createElement('div');
+    head.dataset.stepHead = 'true';
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;'
       + 'gap:12px;margin-bottom:18px;';
-    h.parentNode.insertBefore(wrap, h);
-    wrap.appendChild(h);
-    wrap.appendChild(back);
+    h.parentNode.insertBefore(head, h);
+    head.appendChild(h);
+    head.appendChild(back);
+  }
+
+  // Skipping this body of water belongs on the same line, between the heading
+  // and Back, rather than taking a whole row to itself
+  const skipRow = card.querySelector('[id$="SkipRow"]');
+  if(skipRow){
+    const skipBtn = skipRow.querySelector('button');
+    if(skipBtn && skipBtn.parentElement !== head){
+      skipBtn.style.width = 'auto';
+      skipBtn.style.flexShrink = '0';
+      skipBtn.style.padding = '6px 12px';
+      skipBtn.style.fontSize = '12.5px';
+      head.insertBefore(skipBtn, back);
+      skipRow.style.display = 'none';
+    }
+    // The heading takes the slack, so the two buttons sit together on the right
+    h.style.flex = '1 1 auto';
+    h.style.minWidth = '0';
   }
 }
 
@@ -8444,7 +10495,10 @@ function restoreFinishedSection(type){
   if(after && reading.photo) after.setData(reading.photo);
   const before = beforeControllerFor(type);
   if(before && reading.beforePhoto) before.setData(reading.beforePhoto);
-  if(type === 'pool' && reading.gatePhoto && typeof gatePhotoController !== 'undefined'){
+  // The gate photo belongs to whichever body of water was serviced last, not
+  // to the pool. Restoring it only on the pool meant one taken on a spa or a
+  // fountain vanished as soon as the technician looked at another section.
+  if(reading.gatePhoto && typeof gatePhotoController !== 'undefined'){
     gatePhotoController.setData(reading.gatePhoto);
   }
 
@@ -8627,6 +10681,7 @@ async function removeVisitSavedReadings(){
 async function discardVisitInProgress(){
   // Nothing held for this customer survives a cancelled report
   if(currentVisitCustomerId) clearVisitPackage(currentVisitCustomerId);
+  poolServicePressed = {customerId: null, on: {}};
   // Anything already written for this visit goes too — cancelling means there
   // should be no report at all, not a partial one.
   await removeVisitSavedReadings();
@@ -9094,6 +11149,98 @@ async function openVisit(customerId){
 // should carry on to the rest of the property rather than forcing a reading
 // that is not there. Nothing is recorded for a skipped body — it simply does
 // not appear in the report.
+
+// When a technician is required to justify a skip, this asks for a photo and a
+// note and refuses to go ahead without both. Returns null if they back out, or
+// {photo, note} once it has what it needs.
+function askSkipProof(label){
+  return new Promise(resolve=>{
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box" style="max-width:420px;">
+        <h3 style="margin:0 0 6px;">Skipping the ${esc(label)}</h3>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">
+          You need a photo of why it is being skipped, and a short note. Both are
+          required before this can be skipped.</p>
+
+        <div class="field">
+          <button class="btn btn-ghost" type="button" id="skipProofPhotoBtn" style="width:100%;">Take photo</button>
+          <input type="file" accept="image/*" capture="environment" id="skipProofFile" style="display:none;">
+          <div id="skipProofPreview" style="display:none;margin-top:10px;text-align:center;">
+            <img id="skipProofImg" style="width:25%;min-width:96px;border-radius:8px;display:inline-block;cursor:zoom-in;" alt="Reason photo" title="Tap to see it full size">
+            <div>
+              <button class="btn btn-ghost" type="button" id="skipProofRemove"
+                style="width:auto;margin-top:8px;padding:6px 12px;font-size:12.5px;">Remove photo</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Why is it being skipped?</label>
+          <textarea id="skipProofNote" rows="3" placeholder="Spa drained for repairs, fountain switched off for winter..." style="min-height:74px;"></textarea>
+        </div>
+
+        <p id="skipProofErr" style="font-size:12.5px;color:var(--rust);margin:0 0 10px;display:none;"></p>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="skipProofSave" style="flex:1;">Skip it</button>
+          <button class="btn btn-ghost" id="skipProofCancel" style="width:auto;">Cancel</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    let photoData = null;
+    const fileEl = overlay.querySelector('#skipProofFile');
+    const errEl = overlay.querySelector('#skipProofErr');
+    const say = (m)=>{ errEl.textContent = m; errEl.style.display = 'block'; };
+
+    overlay.querySelector('#skipProofPhotoBtn').addEventListener('click', ()=> fileEl.click());
+
+    // Same as every other photo in the app: tap to see it full size
+    overlay.querySelector('#skipProofImg').addEventListener('click', ()=>{
+      if(photoData) openPhotoFullSize(photoData);
+    });
+
+    overlay.querySelector('#skipProofRemove').addEventListener('click', ()=>{
+      photoData = null;
+      fileEl.value = '';
+      overlay.querySelector('#skipProofPreview').style.display = 'none';
+      overlay.querySelector('#skipProofPhotoBtn').textContent = 'Take photo';
+      errEl.style.display = 'none';
+    });
+
+    fileEl.addEventListener('change', async ()=>{
+      const f = fileEl.files && fileEl.files[0];
+      if(!f) return;
+      try{
+        photoData = await resizeImageFile(f, 1200, 0.7);
+        overlay.querySelector('#skipProofImg').src = photoData;
+        overlay.querySelector('#skipProofPreview').style.display = 'block';
+        overlay.querySelector('#skipProofPhotoBtn').textContent = 'Retake photo';
+        errEl.style.display = 'none';
+      }catch(e){
+        say('That photo could not be read. Try again.');
+      }
+    });
+
+    const close = (val)=>{
+      if(overlay.parentNode) document.body.removeChild(overlay);
+      resolve(val);
+    };
+
+    overlay.querySelector('#skipProofCancel').addEventListener('click', ()=> close(null));
+
+    overlay.querySelector('#skipProofSave').addEventListener('click', ()=>{
+      const note = overlay.querySelector('#skipProofNote').value.trim();
+      if(!photoData){ say('A photo is required before this can be skipped.'); return; }
+      if(!note){ say('Write a short note saying why.'); return; }
+      close({photo: photoData, note: note});
+    });
+  });
+}
+
 async function skipBodyOfWater(type){
   if(!pendingVisit || !currentVisitCustomerId) return;
 
@@ -9104,11 +11251,19 @@ async function skipBodyOfWater(type){
     ? (sectionLabel(customers.find(c => c.id === currentVisitCustomerId), sectionId) || 'fountain')
     : type;
 
-  const ok = await confirmDialog(
-    'Skip the ' + label + ' on this visit?\n\n'
-    + 'No readings or photos will be recorded for it, and it will not appear on '
-    + 'the service report.', 'Skip it');
-  if(!ok) return;
+  // Some technicians must justify a skip with a photo and a note. Set per
+  // technician on the Technicians page.
+  let proof = null;
+  if(techRequires('requireSkipProof')){
+    proof = await askSkipProof(label);
+    if(!proof) return;                      // backed out
+  } else {
+    const ok = await confirmDialog(
+      'Skip the ' + label + ' on this visit?\n\n'
+      + 'No readings or photos will be recorded for it, and it will not appear on '
+      + 'the service report.', 'Skip it');
+    if(!ok) return;
+  }
 
   // Anything already typed for this body goes, so a half-filled reading cannot
   // be committed later by accident
@@ -9116,6 +11271,20 @@ async function skipBodyOfWater(type){
   if(pkg && pkg.sections && pkg.sections[sectionId]){
     delete pkg.sections[sectionId];
     saveVisitPackage(currentVisitCustomerId, pkg);
+  }
+
+  // Keep the justification against the visit, so a skip is never invisible
+  if(proof){
+    const skips = lsGet('skipProof:' + currentVisitCustomerId) || [];
+    skips.push({
+      section: sectionId,
+      label: label,
+      note: proof.note,
+      photo: proof.photo,
+      technician: currentUser ? currentUser.name : '',
+      at: new Date().toISOString()
+    });
+    lsSet('skipProof:' + currentVisitCustomerId, skips);
   }
 
   // Marked done so the visit moves on; no reading id, so nothing is committed
@@ -9141,15 +11310,10 @@ function markSectionDone(sectionId, readingId){
     pendingVisit.doneSections[id] === undefined);
   if(!next) return;
 
-  // Open at the chemical readings, which is not step 1 when the before photo
-  // step is switched on
-  const nextType = (next === 'pool' || next === 'spa') ? next : 'fountain';
-  const cap = nextType.charAt(0).toUpperCase() + nextType.slice(1);
-  const steps = visitStepCardsFor(nextType);
-  // A step entry can be a single card or a pair, so read the first either way
-  const firstCardOf = s => Array.isArray(s) ? s[0] : s;
-  const readingsAt = steps.findIndex(s => firstCardOf(s) === 'visit' + cap + 'Section');
-  visitStepBySection[next] = readingsAt >= 0 ? readingsAt + 1 : 1;
+  // Open at the first step, which is the before photo when that step is on.
+  // Jumping straight to the readings meant the spa and every extra body of
+  // water never got a before photo taken.
+  visitStepBySection[next] = 1;
 
   showVisitSection(next);
 
@@ -9306,6 +11470,7 @@ async function finalizeVisitSend(){
   }
 
   currentVisitCustomerId = null;
+  try{ if(typeof syncApplyHeldSettings === 'function') syncApplyHeldSettings(); }catch(e){}
   currentVisibleSection = null;
   currentVisitStep = 1;
   visitStepBySection = {};
@@ -9450,7 +11615,7 @@ function webpToJpegDataUrl(dataUrl){
   return new Promise((resolve)=>{
     if(!dataUrl){ resolve(''); return; }
     // Already a JPEG, nothing to do
-    if(dataUrl.indexOf('image/jpeg') !== -1){ resolve(dataUrl); return; }
+    // A JPEG still goes through, so it is sized for an email like the rest
     try{
       const img = new Image();
       // If the image never decodes, neither onload nor onerror may fire — and
@@ -9462,15 +11627,24 @@ function webpToJpegDataUrl(dataUrl){
 
       img.onload = ()=>{
         try{
+          // Sized for an email rather than for printing. A camera photo is
+          // several megabytes; seven of those overflow what an email can carry
+          // and the last ones were being dropped. The longest edge is capped,
+          // which is still far more detail than the report shows or than
+          // anyone needs when they open it full size.
+          const LONGEST_EDGE = 1600;
+          const wide = img.naturalWidth || img.width;
+          const tall = img.naturalHeight || img.height;
+          const shrink = Math.min(1, LONGEST_EDGE / Math.max(wide, tall));
           const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
+          canvas.width = Math.max(1, Math.round(wide * shrink));
+          canvas.height = Math.max(1, Math.round(tall * shrink));
           const ctx = canvas.getContext('2d');
           // JPEG has no transparency, so anything see-through would go black
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          finish(canvas.toDataURL('image/jpeg', 0.82));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL('image/jpeg', 0.78));
         }catch(e){ finish(dataUrl); }
       };
       // Conversion failed — send what we have rather than nothing
@@ -9480,31 +11654,51 @@ function webpToJpegDataUrl(dataUrl){
   });
 }
 
-const MAX_REPORT_PHOTOS = 6;
+// Whatever the technician took, the report carries. The only ceiling is a
+// guard against something having gone wrong; the office decides what fits in
+// the email itself, and says so when something does not.
+const MAX_REPORT_PHOTOS = 60;
+
+// What the visit had, against what could be read back off this phone. A photo
+// whose stored copy will not come back is skipped in silence otherwise, which
+// is how a seven-photo visit turned into a four-photo report.
+let lastPhotoTally = {taken: 0, missing: []};
+// Photos a reading holds that this phone can no longer produce
+let photosNotOnThisPhone = [];
 
 function collectReportPhotos(sections){
   const out = [];
-  const add = (dataUrl, name)=>{
-    if(!dataUrl || out.length >= MAX_REPORT_PHOTOS) return;
+  const tally = {taken: 0, missing: []};
+  // The caption is decided here, where the body of water is known — "Pool
+  // before", "Spa after" — rather than guessed from a file name later
+  const add = (dataUrl, name, caption)=>{
+    tally.taken++;
+    if(!dataUrl){ tally.missing.push(caption || name); return; }
+    if(out.length >= MAX_REPORT_PHOTOS){ tally.missing.push((caption || name) + ' (over the limit)'); return; }
     // Held as-is here; converted to JPEG just before sending
-    out.push({name: name, source: dataUrl});
+    out.push({name: name, source: dataUrl, caption: caption || ''});
   };
 
   (sections || []).forEach(s=>{
     const r = s.reading || {};
-    const label = String(s.label || 'photo').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    if(r.beforePhoto) add(r.beforePhoto, label + '-before.jpg');
-    if(r.photo) add(r.photo, label + '-after.jpg');
+    const body = String(s.label || '').trim();
+    const label = (body || 'photo').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const says = what => (body ? body + ' ' + what : what.charAt(0).toUpperCase() + what.slice(1));
+    if(r.beforePhoto) add(r.beforePhoto, label + '-before.jpg', says('before'));
+    if(r.photo) add(r.photo, label + '-after.jpg', says('after'));
     // Anything the company added themselves
     Object.keys(r.customPhotos || {}).forEach(k=>{
-      add(r.customPhotos[k], label + '-' + String(k).replace(/[^a-z0-9]+/gi, '-') + '.jpg');
+      const what = String(k).replace(/[-_]+/g, ' ').trim();
+      add(r.customPhotos[k], label + '-' + String(k).replace(/[^a-z0-9]+/gi, '-') + '.jpg',
+          says(what || 'photo'));
     });
   });
 
   // The gate goes last — it is proof the property was left secure
   const gate = (sections || []).map(s => (s.reading || {}).gatePhoto).find(Boolean);
-  if(gate) add(gate, 'gate.jpg');
+  if(gate) add(gate, 'gate.jpg', 'Gate');
 
+  lastPhotoTally = tally;
   return out;
 }
 
@@ -9543,9 +11737,19 @@ async function renderFullCombinedReport(customerId, poolReadingId, spaReadingId,
 
   // Pull the images back out of the database for display. Only the photos on
   // this one report are loaded, not the whole library.
+  // A reading can hold a photo whose stored copy will not come back. That is
+  // the real loss, and it is counted here where both are visible at once.
+  photosNotOnThisPhone = [];
   for(const s of sections){
     for(const field of ['photo','beforePhoto','gatePhoto']){
-      if(s.reading[field]) s.reading[field] = await resolvePhoto(s.reading[field]);
+      if(s.reading[field]){
+        const back = await resolvePhoto(s.reading[field]);
+        if(!back){
+          photosNotOnThisPhone.push(s.label + ' '
+            + (field === 'photo' ? 'after' : field === 'beforePhoto' ? 'before' : 'gate'));
+        }
+        s.reading[field] = back;
+      }
     }
     if(s.reading.customPhotos){
       for(const id of Object.keys(s.reading.customPhotos)){
@@ -9848,6 +12052,90 @@ function buildReportEmailHtml(customer, whenText, sections, opts){
     + '</table></td></tr></table></body></html>';
 }
 
+// ---- Sending a report from the office ----
+// The phone hands the report over and the office sends it, so a phone that is
+// off, closed or out of signal no longer holds somebody's report up. It goes
+// out as "<the company> via Weir", with replies going to the company's own
+// address — both read from the server, so nobody can send as anyone else.
+function noteLastReport(by, why, counts){
+  try{
+    const note = {at: new Date().toISOString(), by: by, why: why || ''};
+    if(counts) Object.assign(note, counts);
+    deviceSet('lastReport', note);
+    setTimeout(fieldRenderSyncCard, 0);
+  }catch(e){}
+}
+
+async function sendReportFromOffice(customerId, type){
+  const actions = document.getElementById('reportActions');
+  const email = actions.dataset.email;
+  const custName = actions.dataset.customerName;
+  const session = deviceGet('session');
+  if(!session || !session.access_token){
+    noteLastReport('the old way', 'this phone needs signing in again');
+    return {ok: false, reason: 'signed-out'};
+  }
+
+  const photos = [];
+  // Every photo gathered has to leave the phone. Sizing one down can fail —
+  // a phone runs out of room converting several camera photos in a row — and
+  // that used to drop the photo without a word. Now the original goes instead,
+  // and anything that still cannot be read is counted and reported.
+  let couldNotRead = 0;
+  for(const p of (currentReportPhotos || [])){
+    let content = '';
+    try{
+      const jpeg = await webpToJpegDataUrl(p.source);
+      content = String(jpeg || '').split(',')[1] || '';
+    }catch(e){}
+    if(!content){
+      // Send it as it was rather than not at all
+      try{ content = String(p.source || '').split(',')[1] || ''; }catch(e){}
+    }
+    if(content){
+      photos.push({filename: p.name || 'photo.jpg', content: content, caption: p.caption || ''});
+    } else {
+      couldNotRead++;
+    }
+  }
+
+  try{
+    const res = await fetch(FIELD_SUPABASE_URL + '/functions/v1/send-report', {
+      method: 'POST',
+      headers: {'apikey': FIELD_SUPABASE_KEY,
+                'Authorization': 'Bearer ' + session.access_token,
+                'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        to: email,
+        subject: reportTypeLabel(type) + ' service report \u2014 ' + custName,
+        html: currentReportHtml || currentReportText,
+        customerId: customerId,
+        photos: photos
+      })
+    });
+    if(res.status === 401){
+      // The sign-in needed refreshing; the next attempt will carry a fresh one
+      const again = await fieldRefresh();
+      return {ok: false, reason: again === true ? 'retry' : 'signed-out'};
+    }
+    const body = await res.json().catch(()=> ({}));
+    if(!res.ok){
+      noteLastReport('the old way', (body.error || ('the office said ' + res.status)));
+      return {ok: false, reason: 'refused', message: body.error || ''};
+    }
+    noteLastReport('office', '', {sent: photos.length, shown: body.photos,
+                                  linked: body.linked,
+                                  gathered: (currentReportPhotos || []).length,
+                                  unreadable: couldNotRead,
+                                  taken: lastPhotoTally.taken,
+                                  missing: (photosNotOnThisPhone || []).slice(0, 8)});
+    return {ok: true};
+  }catch(e){
+    noteLastReport('the old way', 'no connection when it was sent');
+    return {ok: false, reason: 'offline'};
+  }
+}
+
 async function sendViaEmailJS(customerId, type){
   const actions = document.getElementById('reportActions');
   const email = actions.dataset.email;
@@ -9903,10 +12191,32 @@ async function attemptAutoSend(customerId, type, manual){
     return;
   }
 
-  // True one-press send, once EmailJS is configured — no share sheet, no manual "To" field
+  // The office sends it, so it goes whether or not this phone is around.
+  // What happened is written down either way: a message on screen is gone in
+  // two seconds, and "why did that go the old way" needs answering later.
+  const fromOffice = await sendReportFromOffice(customerId, type);
+  if(fromOffice.ok){
+    showToast('Report sent to ' + email);
+    setTimeout(fieldRenderSyncCard, 0);
+    return;
+  }
+  if(fromOffice.reason === 'retry'){
+    const second = await sendReportFromOffice(customerId, type);
+    if(second.ok){ showToast('Report sent to ' + email); return; }
+  }
+
+  // The office could not send it — no signal, or it refused. The old way is
+  // still here, so nothing is worse than it was before, but say what happened
+  // rather than falling back without a word.
+  const officeSaid = fromOffice.reason === 'offline' ? 'no connection'
+    : fromOffice.reason === 'signed-out' ? 'this phone needs signing in again'
+    : (fromOffice.message || fromOffice.reason || 'it was refused');
   if(emailjsIsConfigured()){
     const sent = await sendViaEmailJS(customerId, type);
-    if(sent) return;
+    if(sent){
+      showToast('Sent the old way \u2014 the office could not: ' + officeSaid);
+      return;
+    }
     // fall through to the manual fallbacks below if sending failed
   }
 
@@ -10061,12 +12371,25 @@ document.getElementById('btnDeleteReport').addEventListener('click', async ()=>{
 
 let currentUser = null;
 
-function adminLogout(){
-  lsSet('session', null);
+function adminLogout(message){
+  fieldSignOut();
   currentUser = null;
   document.getElementById('loginUsername').value = '';
   document.getElementById('loginPassword').value = '';
+  fieldRenderLogin();
+  fieldShowError(typeof message === 'string' ? message : '');
   showLogin();
+}
+
+// Switching company signs out whoever was in, back to the sign-in screen
+function fieldOnSignedOut(){
+  currentUser = null;
+  document.getElementById('loginPassword').value = '';
+  showLogin();
+}
+
+function watchAdminAccount(){
+  fieldWatchAccount(true, reason => adminLogout(fieldGoneMessage(reason)));
 }
 
 function showLogin(){
@@ -10082,29 +12405,26 @@ function attachAdminLoginHandlers(){
   const btn = document.getElementById('btnLogin');
   const pass = document.getElementById('loginPassword');
 
-  function attempt(){
-    const u = document.getElementById('loginUsername').value.trim().toLowerCase();
-    const p = pass.value;
-    const err = document.getElementById('loginError');
-    const techs = lsGet('technicians') || [];
-    if(techs.length === 0){
-      err.textContent = 'No accounts set up yet — add technicians on the website first.';
-      err.style.display = 'block';
-      return;
-    }
-    const match = techs.find(t => (t.username || '').toLowerCase() === u && t.password === p);
-    if(!match){
-      err.textContent = "That username and password don't match.";
-      err.style.display = 'block';
-      return;
-    }
-    err.style.display = 'none';
-    lsSet('session', {techId: match.id});
+  let busy = false;
+  async function attempt(){
+    if(busy) return;
+    busy = true;
+    if(btn) btn.disabled = true;
+    // Admin technicians only; owners use a technician profile with admin access
+    const r = await fieldSignIn(document.getElementById('loginUsername').value, pass.value, true);
+    busy = false;
+    if(btn) btn.disabled = false;
+    if(!r.ok){ fieldShowError(r.message); return; }
+    fieldShowError('');
     pass.value = '';
-    currentUser = match;
+    currentUser = fieldCurrentUser();
     const who = document.getElementById('adminSignedInAs');
-    if(who) who.textContent = match.name;
+    if(who) who.textContent = currentUser ? currentUser.name : '';
     hideLogin();
+    adminStartOnOwnRoute();
+    try{ renderHomeList(); }catch(e){}
+    watchAdminAccount();
+    startFieldSync();
   }
 
   if(btn) btn.addEventListener('click', attempt);
@@ -10112,19 +12432,23 @@ function attachAdminLoginHandlers(){
 }
 
 function guardAdminSession(){
-  const saved = lsGet('session');
-  const techs = lsGet('technicians') || [];
-  const tech = saved ? techs.find(t => t.id === saved.techId) : null;
-
   attachAdminLoginHandlers();
-
-  // Any valid sign-in gets in — there is no separate admin tier any more
-  if(tech){
-    currentUser = tech || techs[0] || null;
+  fieldRenderLogin();
+  const user = fieldCurrentUser();
+  // Only admin technicians. Owners make themselves a technician profile with
+  // admin access to use this app.
+  if(user && user.isAdmin){
+    currentUser = user;
     hideLogin();
-    return true;
+    adminStartOnOwnRoute();
+    try{ renderHomeList(); }catch(e){}
+    watchAdminAccount();
+    startFieldSync();
+  } else {
+    if(user) fieldSignOut();
+    showLogin();
   }
-  showLogin();
+  fieldHandleSetupLink();
   return true;
 }
 
@@ -10136,12 +12460,7 @@ async function init(){
   document.getElementById('settingVoiceMode').checked = appSettings.voiceModeEnabled;
   document.getElementById('settingWaterBalance').checked = appSettings.showWaterBalance === true;
   updateVoiceModeIndicator();
-  document.getElementById('settingBeforePhotos').checked = appSettings.showBeforePhotos !== false;
-  document.getElementById('settingAfterPhotos').checked = appSettings.showAfterPhotos !== false;
   document.getElementById('settingTechniciansTab').checked = appSettings.showTechniciansTab !== false;
-  document.getElementById('settingRouteReorder').checked = appSettings.allowRouteReorder !== false;
-    document.getElementById('settingRequireSkipReason').checked = appSettings.requireSkipReason === true;
-document.getElementById('settingGatePhoto').checked = appSettings.showGatePhoto !== false;
   document.getElementById('settingPushToTalk').checked = appSettings.pushToTalkEnabled !== false;
   renderMicSideButtons();
   applyTechniciansTabVisibility();
@@ -10263,6 +12582,14 @@ function addPasswordReveal(input){
     + '<line x1="2" y1="2" x2="22" y2="22"></line></svg>';
 
   btn.innerHTML = eyeOpen;
+  const hide = ()=>{
+    if(input.type !== 'text') return;
+    input.type = 'password';
+    btn.innerHTML = eyeOpen;
+    btn.title = 'Show password';
+    btn.setAttribute('aria-label', 'Show password');
+  };
+
   btn.addEventListener('click', ()=>{
     const showing = input.type === 'text';
     input.type = showing ? 'password' : 'text';
@@ -10272,6 +12599,23 @@ function addPasswordReveal(input){
     btn.setAttribute('aria-label', label);
     input.focus();
   });
+
+  // A revealed password must never stay revealed. Leaving the page, switching
+  // away from the app, or locking the phone all put it back — otherwise it sits
+  // there in plain text for whoever picks the device up next.
+  input.addEventListener('blur', hide);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) hide(); });
+  window.addEventListener('pagehide', hide);
+  window.addEventListener('blur', hide);
+  if(typeof switchView === 'function' && !window.__hideOnViewChange){
+    window.__hideOnViewChange = [];
+    const realSwitch = switchView;
+    switchView = function(){
+      (window.__hideOnViewChange || []).forEach(fn => { try{ fn(); }catch(e){} });
+      return realSwitch.apply(this, arguments);
+    };
+  }
+  if(window.__hideOnViewChange) window.__hideOnViewChange.push(hide);
 
   wrap.appendChild(btn);
 }
