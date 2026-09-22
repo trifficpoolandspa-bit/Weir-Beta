@@ -1,6 +1,6 @@
 {
-  "name": "PoolLog Office",
-  "short_name": "Office",
+  "name": "Weir Beta Office",
+  "short_name": "Beta Office",
   "start_url": "./customer-intake.html",
   "scope": "./",
   "display": "standalone",
