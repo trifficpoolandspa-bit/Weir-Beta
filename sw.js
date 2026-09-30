@@ -8,8 +8,7 @@
 // Bump the version to force every device to take a fresh copy.
 // Renamed with the app. The new name means every device builds a fresh
 // cache and drops the old one, which is what the line below already does.
-// Its own cache, so a tester's beta copy and the real app never share files
-const CACHE_NAME = 'weir-beta-cache-v2';
+const CACHE_NAME = 'weir-cache-v31';
 
 const PRECACHE_URLS = [
   './',
@@ -48,8 +47,7 @@ self.addEventListener('install', (event)=>{
 self.addEventListener('activate', (event)=>{
   event.waitUntil(
     caches.keys()
-      // Only the beta's own old copies: the real app's (same web address) is left alone
-      .then(keys => Promise.all(keys.filter(k => k.indexOf('weir-beta-cache-') === 0 && k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
       .then(()=> self.clients.claim())
       // Take over open tabs and reload them, so the technician is not left
       // looking at the old app until they close and reopen it.
