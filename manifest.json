@@ -1,9 +1,10 @@
 {
-  "name": "Weir Beta",
-  "short_name": "Weir Beta",
+  "name": "Weir",
+  "short_name": "Weir",
   "start_url": "./index.html?app=service",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#F4F7F6",
   "theme_color": "#114B4F",
   "icons": [

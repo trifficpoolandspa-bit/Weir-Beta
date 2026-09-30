@@ -9,11 +9,12 @@
 // Renamed with the app. The new name means every device builds a fresh
 // cache and drops the old one, which is what the line below already does.
 // Its own cache, so a tester's beta copy and the real app never share files
-const CACHE_NAME = 'weir-beta-cache-v1';
+const CACHE_NAME = 'weir-beta-cache-v2';
 
 const PRECACHE_URLS = [
   './',
   './index.html',
+  './app.html',
   './technician-app.html',
   './admin-readings-app.html',
   './customer-intake.html',
@@ -47,7 +48,8 @@ self.addEventListener('install', (event)=>{
 self.addEventListener('activate', (event)=>{
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      // Only the beta's own old copies: the real app's (same web address) is left alone
+      .then(keys => Promise.all(keys.filter(k => k.indexOf('weir-beta-cache-') === 0 && k !== CACHE_NAME).map(k => caches.delete(k))))
       .then(()=> self.clients.claim())
       // Take over open tabs and reload them, so the technician is not left
       // looking at the old app until they close and reopen it.
@@ -57,7 +59,7 @@ self.addEventListener('activate', (event)=>{
 });
 
 // Find a cached copy, ignoring anything after the ? — otherwise opening
-// technician-app.html?dev=1 misses the cache and fails offline.
+// app.html?dev=1 misses the cache and fails offline.
 async function findCached(request){
   const cache = await caches.open(CACHE_NAME);
   return (await cache.match(request))
@@ -89,7 +91,7 @@ self.addEventListener('fetch', (event)=>{
         throw new Error('bad response');
       }catch(e){
         return (await findCached(request))
-            || (await caches.match('./technician-app.html', {ignoreSearch: true}))
+            || (await caches.match('./app.html', {ignoreSearch: true}))
             || (await caches.match('./index.html', {ignoreSearch: true}))
             || new Response(
                  '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'

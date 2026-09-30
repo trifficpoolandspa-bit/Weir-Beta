@@ -1,6 +1,6 @@
 {
-  "name": "Weir Beta Office",
-  "short_name": "Beta Office",
+  "name": "Weir Office",
+  "short_name": "Office",
   "start_url": "./customer-intake.html",
   "scope": "./",
   "display": "standalone",
