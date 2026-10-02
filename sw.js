@@ -9,7 +9,7 @@
 // Renamed with the app. The new name means every device builds a fresh
 // cache and drops the old one, which is what the line below already does.
 // Its own cache, so a tester's beta copy and the real app never share files
-const CACHE_NAME = 'weir-beta-cache-v7';
+const CACHE_NAME = 'weir-beta-cache-v8';
 
 const PRECACHE_URLS = [
   './',
