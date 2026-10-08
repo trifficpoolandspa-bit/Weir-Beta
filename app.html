@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weir — Readings & Reports</title>
 <link rel="manifest" href="./manifest.json">
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <meta name="theme-color" content="#114B4F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -331,6 +330,25 @@ textarea{min-height:52px;resize:vertical;}
 @keyframes briefIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
 
 .reorder-placeholder{pointer-events:none;}
+.svc-tasks{display:flex;flex-direction:column;gap:8px;}
+/* As the Filter backwashed / Salt cell cleaned buttons: teal outline, solid when done */
+.svc-tasks .svc-task{width:100%;padding:9px 14px;border-radius:10px;font-size:14px;font-weight:600;line-height:1.25;
+  font-family:'Inter',sans-serif;cursor:pointer;text-align:center;
+  background:#fff;color:var(--teal-deep);border:1.5px solid var(--teal-mid);transition:background-color .15s ease,color .15s ease;}
+.svc-tasks .svc-task.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
+/* Text that's cut off scrolls to show the rest, then starts over (Oct 3).
+   --marquee-shift is set per piece of text: how far it must travel. */
+@keyframes weirMarquee{
+  0%, 18%   { transform: translateX(0); }
+  82%, 100% { transform: translateX(var(--marquee-shift, 0px)); }
+}
+.marquee-inner{display:inline-block;white-space:nowrap;will-change:transform;}
+.marquee-on .marquee-inner{animation:weirMarquee var(--marquee-time, 6s) ease-in-out infinite;}
+/* Technicians → Photo requirements: only its own card shows, whatever else
+   redraws the list underneath (Oct 3) */
+#view-technicians.photos-mode #techListCard,
+#view-technicians.photos-mode #techFormCard,
+#view-technicians.photos-mode #techRouteCard{display:none !important;}
 .cust-row{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
   display:flex;justify-content:space-between;align-items:center;
   padding:15px 4px 15px 12px;border-bottom:1px solid var(--line);cursor:pointer;
@@ -736,6 +754,9 @@ select#customerSelect{font-weight:600;}
     <div class="card" id="visitPoolPhotoSection" style="display:none;">
       <div id="customPhotos_pool_after" style="display:none;"></div>
       <h2>After Photos</h2>
+      <!-- Skimmer basket, pump basket, skimmed, brushed (Oct 3): moved to the top
+           of the pool's last page when this technician has no after photo -->
+      <div id="poolServiceTasks" class="svc-tasks" style="margin:10px 0 16px;"></div>
       <p class="voice-hint" style="margin:0 0 14px;">Tap a photo to access the delete button.</p>
       <div id="gatePhotoBlock" style="display:none;margin-bottom:16px;padding:14px;border:1.5px solid #E8B5A8;border-radius:11px;background:#FBEAE6;text-align:center;">
         <div style="font-size:14px;font-weight:700;color:#B8492E;margin-bottom:4px;">Closed gate photo required</div>
@@ -884,9 +905,11 @@ select#customerSelect{font-weight:600;}
   <!-- CUSTOMERS VIEW -->
   <div class="view" id="view-technicians">
     <!-- Technicians and Photo requirements, as on the website (Oct 3) -->
-    <div class="seg-control" id="techMainTabs" style="margin:0 0 12px;">
-      <button class="history-type-btn active" data-techmain="list" type="button">Technicians</button>
-      <button class="history-type-btn" data-techmain="photos" type="button">Photo requirements</button>
+    <div class="card" id="techMainTabs" style="padding:10px;">
+      <div class="btn-row" style="gap:6px;">
+        <button class="btn btn-primary" data-techmain="list" type="button" style="flex:1;white-space:nowrap;padding-left:8px;padding-right:8px;">Technicians</button>
+        <button class="btn btn-ghost" data-techmain="photos" type="button" style="flex:1;white-space:nowrap;padding-left:8px;padding-right:8px;">Photo requirements</button>
+      </div>
     </div>
     <div class="card" id="photoRequireCard" style="display:none;">
       <h2 style="margin:0 0 4px;">Photos a technician must take</h2>
@@ -2213,6 +2236,8 @@ function regularPhotoWanted(type, when){
   return !!(lists && (when === 'before' ? lists.requireBeforePhoto : lists.requireAfterPhoto) === true);
 }
 function syncRegularPhotoParts(){
+  // Placed once the photo parts below are set (at the end), not a frame later
+  try{ queueMicrotask(()=>{ try{ drawServiceTasks(); }catch(e){} try{ placeVisitNotes(); }catch(e){} }); }catch(e){}
   Object.keys(PHOTO_PAGES).forEach(type=>{
     ['before', 'after'].forEach(when=>{
       const card = document.getElementById(PHOTO_PAGES[type][when]);
@@ -2221,6 +2246,8 @@ function syncRegularPhotoParts(){
       Array.from(card.children).forEach(el=>{
         if(el.id === 'customPhotos_' + type + '_' + when) return;   // the extra photos
         if(el.id === 'gatePhotoBlock') return;                     // the gate photo
+        if(el.id === 'poolServiceTasks') return;                   // its own place (Oct 3)
+        if(el.querySelector && el.querySelector('#inNotes, #inSpaNotes, #inFountainNotes')) return;   // notes (Oct 3)
         el.classList.toggle('photo-part-off', off);
       });
     });
@@ -2338,7 +2365,8 @@ function renderConfigFields(containerId, list, type, kind, onInput){
     const wrap = document.createElement('div');
     wrap.className = 'field';
     const label = document.createElement('label');
-    label.textContent = item.label + (item.unit ? ' (' + item.unit + ')' : '');
+    // Readings show just their name; dosages keep their unit (Oct 3)
+    label.textContent = item.label + (kind !== 'chem' && item.unit ? ' (' + item.unit + ')' : '');
     const input = document.createElement('input');
     input.className = 'mono';
     input.type = 'number';
@@ -2871,6 +2899,14 @@ function switchView(view, opts){
   if(view === 'technicians' && !keepAsLeft){
     selectedTechId = null;
     editingTechId = null;
+    // ...and it opens on Technicians again, not Photo requirements (Oct 3),
+    // as Customers opens on Customers
+    const prCard = document.getElementById('photoRequireCard');
+    if(prCard) prCard.style.display = 'none';
+    document.getElementById('view-technicians').classList.remove('photos-mode');
+    document.querySelectorAll('#techMainTabs [data-techmain]').forEach(b=>{
+      b.className = 'btn ' + (b.dataset.techmain === 'list' ? 'btn-primary' : 'btn-ghost');
+    });
     renderTechList();
   }
   // Back to a technician's route as it was left: drawn again from what's saved
@@ -3734,7 +3770,8 @@ const SYNC_SETUP_KEYS = ['chemConfig', 'customChemConfig', 'customBodyOrder', 'r
                          'chemSeasons',
                          // The order of the website's Technicians list
                          'technicianOrder',
-                         'reportEmailStyle', 'customerGroups', 'photoDefaults', 'photoEveryone'];
+                         'reportEmailStyle', 'customerGroups', 'photoDefaults', 'photoEveryone',
+                         'photoDefaultsSeeded'];
 const SYNC_COMPANY_DETAIL_KEYS = ['companyName', 'ownerName', 'licenseNumber', 'serviceArea',
   'accountEmail', 'accountPhone', 'businessAddress', 'businessCity', 'businessState',
   'businessZip', 'businessWebsite'];
@@ -4440,6 +4477,7 @@ function syncWorkLocal(){
 function syncScanWork(state, now){
   try{ workOrderMediaFromSubmissions(); }catch(e){}
   try{ sendJobEmails(); }catch(e){}
+  try{ sendHeldReportEmails(); }catch(e){}       // held service reports (Oct 3)
   const wk = state.work;
   const stamp = now || new Date().toISOString();
   const local = syncWorkLocal();
@@ -5809,6 +5847,9 @@ function techWantsPhoto(step, type){
 // Set for this technician on the website: they see the photo and may walk
 // past it. A tick on a body of water still makes it required there.
 function techOptionalPhoto(step){
+  // The after photo is always on a service report's last page, optional
+  // unless a tick makes it required for that body of water (Oct 3)
+  if(step === 'after') return true;
   const opt = currentUser && currentUser.photoOptional;
   return !!(opt && opt[step] === true) || photoEveryoneOn(step, 'optional');
 }
@@ -6632,8 +6673,14 @@ function reorderEquipmentType(draggedType, targetType){
 // while a placeholder holds its gap and the other rows glide out of the way.
 // Reordering only happens when the finger passes a neighbour's midpoint, so
 // nothing jitters back and forth.
-function attachTouchReorder(handle, item, container, itemSelector, onReorder){
+function attachTouchReorder(handle, item, container, itemSelector, onReorder, opts){
   const DRAG_THRESHOLD = 8;   // pixels of travel before it counts as a drag
+  // opts.holdMs (Oct 3): the grip must be held still this long before it can be
+  // moved, so a swipe across it scrolls instead of grabbing it (the service
+  // report's tabs). Without it, everything works as it always has.
+  const HOLD_MS = opts && opts.holdMs ? opts.holdMs : 0;
+  let holdTimer = null, held = false;
+  const cancelHold = ()=>{ clearTimeout(holdTimer); holdTimer = null; held = false; item.style.transform = ''; };
   let dragging = false;
   let armed = false;          // touched the grip, but not yet moved enough
   let armX = 0, armY = 0;
@@ -6758,21 +6805,43 @@ function attachTouchReorder(handle, item, container, itemSelector, onReorder){
     }
   }
 
-  handle.style.touchAction = 'none';
+  // With a hold, the page can still scroll from the grip until it's been held
+  handle.style.touchAction = HOLD_MS ? 'pan-x pan-y' : 'none';
   handle.style.webkitUserSelect = 'none';
   handle.style.userSelect = 'none';
   handle.style.cursor = 'grab';
 
   handle.addEventListener('touchstart', (e)=>{
     if(e.touches.length !== 1) return;
-    e.preventDefault();
     armed = true;
     armX = e.touches[0].clientX;
     armY = e.touches[0].clientY;
+    if(HOLD_MS){
+      // Held still for the time: picked up, with a small lift and buzz to say so
+      cancelHold();
+      holdTimer = setTimeout(()=>{
+        holdTimer = null;
+        if(!armed) return;
+        held = true;
+        item.style.transition = 'transform .12s ease';
+        item.style.transform = 'scale(1.06)';
+        try{ if(navigator.vibrate) navigator.vibrate(15); }catch(err){}
+        handle.style.touchAction = 'none';
+      }, HOLD_MS);
+      return;                 // the page may still scroll until then
+    }
+    e.preventDefault();
   }, {passive:false});
 
   handle.addEventListener('touchmove', (e)=>{
     const t = e.touches[0];
+    if(HOLD_MS && armed && !dragging && !held){
+      // Moved before the hold was up: it's a swipe — let the page have it
+      if(Math.abs(t.clientX - armX) >= DRAG_THRESHOLD || Math.abs(t.clientY - armY) >= DRAG_THRESHOLD){
+        armed = false; cancelHold();
+      }
+      return;
+    }
     if(armed && !dragging){
       // Wait for real movement before picking the row up
       if(Math.abs(t.clientX - armX) < DRAG_THRESHOLD
@@ -6791,6 +6860,7 @@ function attachTouchReorder(handle, item, container, itemSelector, onReorder){
   ['touchend','touchcancel'].forEach(ev=>{
     handle.addEventListener(ev, (e)=>{
       armed = false;
+      if(HOLD_MS){ const wasHeld = held; cancelHold(); handle.style.touchAction = 'pan-x pan-y'; if(wasHeld && !dragging) return; }
       if(!dragging) return;   // a tap that never became a drag changes nothing
       e.preventDefault();
       drop();
@@ -6800,7 +6870,16 @@ function attachTouchReorder(handle, item, container, itemSelector, onReorder){
   handle.addEventListener('mousedown', (e)=>{
     e.preventDefault();
     armed = true; armX = e.clientX; armY = e.clientY;
+    if(HOLD_MS){
+      cancelHold();
+      holdTimer = setTimeout(()=>{ holdTimer = null; if(!armed) return; held = true;
+        item.style.transition = 'transform .12s ease'; item.style.transform = 'scale(1.06)'; }, HOLD_MS);
+    }
     const onMove = (ev)=>{
+      if(HOLD_MS && armed && !dragging && !held){
+        if(Math.abs(ev.clientX - armX) >= DRAG_THRESHOLD || Math.abs(ev.clientY - armY) >= DRAG_THRESHOLD){ armed = false; cancelHold(); }
+        return;
+      }
       if(armed && !dragging){
         if(Math.abs(ev.clientX - armX) < DRAG_THRESHOLD
            && Math.abs(ev.clientY - armY) < DRAG_THRESHOLD) return;
@@ -6815,6 +6894,7 @@ function attachTouchReorder(handle, item, container, itemSelector, onReorder){
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       armed = false;
+      if(HOLD_MS) cancelHold();
       if(dragging) drop();
     };
     document.addEventListener('mousemove', onMove);
@@ -8173,7 +8253,12 @@ document.getElementById('btnSaveReading').addEventListener('click', async ()=>{
     video: (isLastSectionOfVisit() && visitVideoRefs[0]) || null,
     videoMore: isLastSectionOfVisit() ? visitVideoRefs.slice(1) : [],
     filterBackwashed: (document.getElementById('chkBackwashed') || {}).dataset ? document.getElementById('chkBackwashed').dataset.on === 'true' : false,
-    saltCellCleaned: (document.getElementById('chkSaltCell') || {}).dataset ? document.getElementById('chkSaltCell').dataset.on === 'true' : false
+    saltCellCleaned: (document.getElementById('chkSaltCell') || {}).dataset ? document.getElementById('chkSaltCell').dataset.on === 'true' : false,
+    // The after-photos buttons (Oct 3)
+    skimmerBasketEmptied: visitTasksDone.indexOf('Skimmer basket emptied') !== -1,
+    pumpBasketEmptied: visitTasksDone.indexOf('Pump basket emptied') !== -1,
+    poolSkimmed: visitTasksDone.indexOf('Pool skimmed') !== -1,
+    wallsBrushed: visitTasksDone.indexOf('Walls brushed') !== -1
   };
   // The fields on screen come from THIS customer's list. Reading the global
   // one meant a customer with a custom setup saved nothing at all.
@@ -8207,6 +8292,7 @@ document.getElementById('btnSaveReading').addEventListener('click', async ()=>{
   gatePhotoController.clear();
   beforeControllerFor('pool').clear();
   poolServicePressed = {customerId: null, on: {}};
+  visitTasksDone = []; try{ drawServiceTasks(); }catch(e){}
   ['chkBackwashed','chkSaltCell'].forEach(id=>{
     const el = document.getElementById(id);
     if(el){
@@ -10336,7 +10422,8 @@ function routeJobsFor(customerId, dayISO, techId){
   const cleans = (lsGet('scheduledFilterCleans') || [])
     .filter(s => s && s.status === 'scheduled' && s.date === dayISO && s.customerId === customerId && mine(s))
     .map(s => ({key: 'filter clean:' + s.id, kind: 'filter clean', id: s.id,
-                title: 'Filter clean', details: '', photoRequired: s.photoRequired !== false, videoRequired: false}));
+                // Only when the group's Photo required was ticked (Oct 3)
+                title: 'Filter clean', details: '', photoRequired: s.photoRequired === true, videoRequired: false}));
   return orders.concat(cleans).concat(tasks).filter(j => !jobSubmitted(j.key));
 }
 // The Replacements window on a filter clean (Oct 3): the usual parts to tick,
@@ -13112,11 +13199,15 @@ function drawReportRows(){
       + 'cursor:pointer;user-select:none;-webkit-user-select:none;background:' + (isOpen ? 'var(--teal-pale)' : 'var(--card)') + ';';
     const when = document.createElement('div');
     when.style.cssText = 'font-size:14px;font-weight:600;color:var(--ink);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    when.textContent = fmtDate(d.ts);
+    // The date in a column of one width, so the tags line up down the list (Oct 3)
+    const dateCell = document.createElement('span');
+    dateCell.style.cssText = 'display:inline-block;width:112px;vertical-align:middle;font-size:13.5px;';
+    dateCell.textContent = fmtDate(d.ts);
+    when.appendChild(dateCell);
     const tag = document.createElement('span');
     const tc = d.wo ? jobKindColours('work order') : d.fc ? jobKindColours('filter clean') : d.task ? jobKindColours('task')
       : ['var(--teal-pale)', 'var(--teal-deep)'];
-    tag.style.cssText = "margin-left:8px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;"
+    tag.style.cssText = "margin-left:0;vertical-align:middle;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;"
       + 'letter-spacing:0.07em;text-transform:uppercase;padding:3px 6px;border-radius:6px;'
       + 'color:' + tc[1] + ';background:' + (isOpen && !d.wo && !d.fc && !d.task ? 'var(--card)' : tc[0]) + ';';
     tag.textContent = d.wo ? 'Work order ' + workOrderNumberText(d.wo.workOrderNumber) : d.fc ? 'Filter clean' : d.task ? 'Task' : 'Service report';
@@ -13808,15 +13899,20 @@ function adminVersion_renderVisitSectionButtons(){
       grip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
         + 'width:14px;font-size:14px;line-height:1;color:' + colour.border + ';'
         + 'cursor:grab;user-select:none;';
+      // Held for half a second before it moves, so a swipe along the tabs
+      // doesn't grab one (Oct 3)
       attachTouchReorder(grip, chip, container, '[data-reorder-key]', (keys)=>{
         const store = lsGet('customBodyOrder') || {};
         store[customer.id] = keys;
         lsSet('customBodyOrder', store);
         pendingVisit.neededSections = computeNeededSections(customer);
         renderVisitSectionButtons();
-  renderClipSection();
+        // Which body of water is last may have changed: the videos box follows
+        // (Oct 3: this called the old "Send a clip" card, which then showed on
+        // every page of the report)
+        try{ syncVideoBlock(); }catch(e){}
         showToast('Order saved for ' + customer.name);
-      });
+      }, {holdMs: 500});
 
       chip.appendChild(grip);
       chip.appendChild(btn);
@@ -13908,15 +14004,20 @@ function techVersion_renderVisitSectionButtons(){
       grip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
         + 'width:14px;font-size:14px;line-height:1;color:' + colour.border + ';'
         + 'cursor:grab;user-select:none;';
+      // Held for half a second before it moves, so a swipe along the tabs
+      // doesn't grab one (Oct 3)
       attachTouchReorder(grip, chip, container, '[data-reorder-key]', (keys)=>{
         const store = lsGet('customBodyOrder') || {};
         store[customer.id] = keys;
         lsSet('customBodyOrder', store);
         pendingVisit.neededSections = computeNeededSections(customer);
         renderVisitSectionButtons();
-  renderClipSection();
+        // Which body of water is last may have changed: the videos box follows
+        // (Oct 3: this called the old "Send a clip" card, which then showed on
+        // every page of the report)
+        try{ syncVideoBlock(); }catch(e){}
         showToast('Order saved for ' + customer.name);
-      });
+      }, {holdMs: 500});
 
       chip.appendChild(grip);
       chip.appendChild(btn);
@@ -16873,6 +16974,11 @@ document.getElementById('stepBarNext').addEventListener('click', ()=>{
 function goToVisitStep(step){
   currentVisitStep = step;
   applyVisitStep();
+  // The pool's buttons and the notes are put in place now, before the page is
+  // drawn (Oct 8: on a timer they arrived a frame late and pushed the photos
+  // down — the stutter on the after-photos page)
+  try{ drawServiceTasks(); }catch(e){}
+  try{ placeVisitNotes(); }catch(e){}
 }
 
 
@@ -16952,6 +17058,11 @@ function restoreFinishedSection(type){
     : (type === 'spa' ? 'inSpaNotes' : 'inFountainNotes');
   const notes = document.getElementById(notesId);
   if(notes && reading.notes !== undefined) notes.value = reading.notes;
+  // The after-photos buttons pressed on that visit (Oct 3)
+  if(type === 'pool'){
+    visitTasksDone = SERVICE_TASKS.filter(t => reading[SERVICE_TASK_FIELDS[t]]);
+    try{ drawServiceTasks(); }catch(e){}
+  }
 
   // Photos come back too — they are part of what was recorded
   const after = type === 'pool' ? poolPhotoController
@@ -17162,6 +17273,7 @@ async function discardVisitInProgress(){
   // Nothing held for this customer survives a cancelled report
   if(currentVisitCustomerId) clearVisitPackage(currentVisitCustomerId);
   poolServicePressed = {customerId: null, on: {}};
+  visitTasksDone = []; try{ drawServiceTasks(); }catch(e){}
   // Anything already written for this visit goes too — cancelling means there
   // should be no report at all, not a partial one.
   await removeVisitSavedReadings();
@@ -17570,6 +17682,11 @@ function sectionsAlreadyDoneToday(customer){
 }
 
 function openVisit(...args){
+  // A different customer's visit starts with no after-photos buttons pressed (Oct 3)
+  try{
+    const id = args[0] && typeof args[0] === 'object' ? args[0].id : args[0];
+    if(!(pendingVisit && pendingVisit.customerId === id)) visitTasksDone = [];
+  }catch(e){}
   return isAdminUser() ? adminVersion_openVisit.apply(this, args) : techVersion_openVisit.apply(this, args);
 }
 async function adminVersion_openVisit(customerId){
@@ -17878,16 +17995,17 @@ async function techVersion_openVisit(customerId){
 // When a technician is required to justify a skip, this asks for a photo and a
 // note and refuses to go ahead without both. Returns null if they back out, or
 // {photo, note} once it has what it needs.
-function askSkipProof(label){
+function askSkipProof(label, required){
+  if(required === undefined) required = true;
   return new Promise(resolve=>{
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
     overlay.innerHTML = `
       <div class="confirm-box" style="max-width:420px;">
         <h3 style="margin:0 0 6px;">Skipping the ${esc(label)}</h3>
-        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">
-          You need a photo of why it is being skipped, and a short note. Both are
-          required before this can be skipped.</p>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">${required
+          ? 'You need a photo of why it is being skipped, and a short note. Both are required before this can be skipped.'
+          : 'Add a photo of why it is being skipped, and a short note, if you like \u2014 neither is needed.'}</p>
 
         <div class="field">
           <button class="btn btn-ghost" type="button" id="skipProofPhotoBtn" style="width:100%;">Take photo</button>
@@ -17974,9 +18092,9 @@ function askSkipProof(label){
 
     overlay.querySelector('#skipProofSave').addEventListener('click', ()=>{
       const note = overlay.querySelector('#skipProofNote').value.trim();
-      if(!photoData){ say('A photo is required before this can be skipped.'); return; }
-      if(!note){ say('Write a short note saying why.'); return; }
-      close({photo: photoData, note: note});
+      if(required && !photoData){ say('A photo is required before this can be skipped.'); return; }
+      if(required && !note){ say('Write a short note saying why.'); return; }
+      close({photo: photoData || null, note: note, required: !!required});
     });
   });
 }
@@ -18016,8 +18134,13 @@ async function skipBodyOfWater(type){
   // technician on the Technicians page.
   let proof = null;
   if(techRequires('requireSkipProof') || photoEveryoneOn('skip', 'skip')){
-    proof = await askSkipProof(label);
+    proof = await askSkipProof(label, true);
     if(!proof) return;                      // backed out
+  } else if(techOptionalPhoto('skip')){
+    // Optional (Oct 3): the same window, nothing in it needed
+    proof = await askSkipProof(label, false);
+    if(!proof) return;                      // backed out
+    if(!proof.photo && !proof.note) proof = null;   // nothing added: a plain skip
   } else {
     const ok = await confirmDialog(
       'Skip the ' + label + ' on this visit?\n\n'
@@ -18042,6 +18165,7 @@ async function skipBodyOfWater(type){
       label: label,
       note: proof.note,
       photo: proof.photo,
+      required: proof.required !== false,   // optional ones are never owed (Oct 3)
       technician: currentUser ? currentUser.name : '',
       at: new Date().toISOString()
     });
@@ -18076,6 +18200,7 @@ function saveSkipProofEntry(sectionId, changes){
 function skippedProofMissing(sectionId){
   const e = skipProofEntry(sectionId);
   if(!e) return false;
+  if(e.required === false) return false;      // given though it wasn't needed (Oct 3)
   return !e.photo || !String(e.note || '').trim();
 }
 function showSkippedScreen(sectionId){
@@ -18517,6 +18642,8 @@ function adminVersion_buildReadingSection(reading, chemList, prodList){
   const doneItems = [];
   if(reading.filterBackwashed) doneItems.push('Filter backwashed');
   if(reading.saltCellCleaned) doneItems.push('Salt cell cleaned');
+  // The after-photos buttons (Oct 3)
+  SERVICE_TASKS.forEach(t => { if(reading[SERVICE_TASK_FIELDS[t]]) doneItems.push(t); });
 
   let servicedHtml = '';
   let servicedText = '';
@@ -18588,6 +18715,8 @@ function techVersion_buildReadingSection(reading, chemList, prodList){
   const doneItems = [];
   if(reading.filterBackwashed) doneItems.push('Filter backwashed');
   if(reading.saltCellCleaned) doneItems.push('Salt cell cleaned');
+  // The after-photos buttons (Oct 3)
+  SERVICE_TASKS.forEach(t => { if(reading[SERVICE_TASK_FIELDS[t]]) doneItems.push(t); });
 
   let servicedHtml = '';
   let servicedText = '';
@@ -19387,6 +19516,10 @@ const EMAILJS_SERVICE_ID = 'service_6i1y90b';
 const EMAILJS_TEMPLATE_ID = 'template_j8bfwfn';
 
 function emailjsIsConfigured(){
+  // Off for good (Oct 3): EmailJS sent every company's reports from one shared
+  // mailbox. Reports go only through the office's sender now; if it can't
+  // send, the report waits for the technician to resend it.
+  return false;
   return EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY'
     && EMAILJS_SERVICE_ID !== 'YOUR_SERVICE_ID'
     && EMAILJS_TEMPLATE_ID !== 'YOUR_TEMPLATE_ID'
@@ -19708,8 +19841,10 @@ async function sendReportFromOffice(customerId, type){
   const custName = actions.dataset.customerName;
   const session = deviceGet('session');
   if(!session || !session.access_token){
-    noteLastReport('the old way', 'this phone needs signing in again');
-    return {ok: false, reason: 'signed-out'};
+    noteLastReport('held', 'this phone needs signing in again');
+    // Held, and sent once this phone is signed in and has signal (Oct 3)
+    await holdReportEmail(customerId, type, email, custName);
+    return {ok: false, reason: 'held'};
   }
 
   const photos = [];
@@ -19767,10 +19902,83 @@ async function sendReportFromOffice(customerId, type){
                                   missing: (photosNotOnThisPhone || []).slice(0, 8)});
     return {ok: true};
   }catch(e){
-    noteLastReport('the old way', 'no connection when it was sent');
-    return {ok: false, reason: 'offline'};
+    noteLastReport('held', 'no connection when it was sent');
+    // No signal: held on this phone and sent as soon as there is (Oct 3)
+    await holdReportEmail(customerId, type, email, custName);
+    return {ok: false, reason: 'held'};
   }
 }
+
+// ---- Service report emails held for signal (Oct 3) ----
+// Like work order and filter clean emails: a report that couldn't go waits on
+// this phone — its layout, who it's to, and its photos (kept in the photo
+// store, not the list) — and goes out by itself once there's signal.
+async function holdReportEmail(customerId, type, email, custName){
+  try{
+    const photos = [];
+    for(const p of (currentReportPhotos || [])){
+      const ref = await storePhoto(p.source, 'heldreport');
+      if(ref) photos.push({name: p.name || 'photo.jpg', caption: p.caption || '', ref: ref});
+    }
+    const q = lsGet('reportEmailsToSend') || [];
+    q.push({key: 'rep_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      to: email, subject: reportTypeLabel(type) + ' service report \u2014 ' + custName,
+      html: currentReportHtml || currentReportText, customerId: customerId, photos: photos,
+      heldAt: new Date().toISOString()});
+    lsSet('reportEmailsToSend', q);
+  }catch(e){}
+}
+let reportEmailsSending = false;
+async function sendHeldReportEmails(){
+  if(reportEmailsSending) return;
+  const q = lsGet('reportEmailsToSend') || [];
+  if(!q.length) return;
+  const session = deviceGet('session');
+  if(!session || !session.access_token) return;
+  if(typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  reportEmailsSending = true;
+  try{
+    for(const item of q){
+      const photos = [];
+      for(const p of (item.photos || [])){
+        let content = '';
+        try{
+          const src = await resolvePhoto(p.ref);
+          const jpeg = src ? await webpToJpegDataUrl(src) : '';
+          content = String(jpeg || src || '').split(',')[1] || '';
+        }catch(e){}
+        if(content) photos.push({filename: p.name, content: content, caption: p.caption || ''});
+      }
+      let res;
+      try{
+        res = await fetch(FIELD_SUPABASE_URL + '/functions/v1/send-report', {
+          method: 'POST',
+          headers: {'apikey': FIELD_SUPABASE_KEY, 'Authorization': 'Bearer ' + (deviceGet('session') || {}).access_token,
+                    'Content-Type': 'application/json'},
+          body: JSON.stringify({to: item.to, subject: item.subject, html: item.html, customerId: item.customerId, photos: photos})
+        });
+      }catch(e){ break; }                       // still no signal: try again later
+      if(res.status === 401){ await fieldRefresh(); break; }
+      if(res.ok || res.status === 400 || res.status === 403){
+        // Sent, or refused for good (a bad address, say): either way off the list
+        lsSet('reportEmailsToSend', (lsGet('reportEmailsToSend') || []).filter(x => x.key !== item.key));
+        (item.photos || []).forEach(p=>{
+          if(isPhotoRef(p.ref)){ try{ deletePhotoData(String(p.ref).slice(PHOTO_REF.length)); }catch(e){} }
+        });
+        if(res.ok){
+          noteLastReport('office', 'sent once there was signal');
+          showToast(item.subject.split(' \u2014 ')[1] + '\u2019s report emailed');
+        } else {
+          let why = '';
+          try{ const body = await res.json(); why = body && body.error ? ': ' + body.error : ''; }catch(e){}
+          showToast('A held report for ' + item.subject.split(' \u2014 ')[1] + ' could not be sent' + why + '. Resend it from the Report tab.');
+        }
+      } else break;                             // the office is having trouble: later
+    }
+  }finally{ reportEmailsSending = false; }
+}
+window.addEventListener('online', ()=>{ setTimeout(()=>{ try{ sendHeldReportEmails(); }catch(e){} }, 1500); });
+setInterval(()=>{ try{ sendHeldReportEmails(); }catch(e){} }, 30000);
 
 function sendViaEmailJS(...args){
   return isAdminUser() ? adminVersion_sendViaEmailJS.apply(this, args) : techVersion_sendViaEmailJS.apply(this, args);
@@ -19885,6 +20093,13 @@ async function adminVersion_attemptAutoSend(customerId, type, manual){
   if(fromOffice.reason === 'retry'){
     const second = await sendReportFromOffice(customerId, type);
     if(second.ok){ showToast('Report sent to ' + email); return; }
+    if(second.reason === 'held'){ showToast('Saved \u2014 the email will go out when you have signal'); return; }
+  }
+  // Held for signal (Oct 3): it goes by itself
+  if(fromOffice.reason === 'held'){
+    showToast('Saved \u2014 the email will go out when you have signal');
+    setTimeout(fieldRenderSyncCard, 0);
+    return;
   }
 
   // The office could not send it — no signal, or it refused. The old way is
@@ -19992,6 +20207,13 @@ async function techVersion_attemptAutoSend(customerId, type, manual){
   if(fromOffice.reason === 'retry'){
     const second = await sendReportFromOffice(customerId, type);
     if(second.ok){ showToast('Report sent to ' + email); return; }
+    if(second.reason === 'held'){ showToast('Saved \u2014 the email will go out when you have signal'); return; }
+  }
+  // Held for signal (Oct 3): it goes by itself
+  if(fromOffice.reason === 'held'){
+    showToast('Saved \u2014 the email will go out when you have signal');
+    setTimeout(fieldRenderSyncCard, 0);
+    return;
   }
 
   // The office could not send it — no signal, or it refused. The old way is
@@ -21019,7 +21241,9 @@ function photoTechnicianList(step, bodies){
     : PHOTO_BODIES.filter(([key]) => bodies[key]);
   // Skipping has its own rules on the phone, so it has no Optional; a video
   // is only ever optional, so its tick is all there is
-  const offersOptional = step !== 'skip' && step !== 'video';
+  // After photo is always shown now, so it has no Optional button (Oct 3)
+  // Skip has Optional too (Oct 3): the photo-and-note window, nothing in it needed
+  const offersOptional = step !== 'video' && step !== 'after';
 
   // Always the technician as they are in the list right now. A sync replaces
   // the whole list with fresh objects, so the one captured when this was drawn
@@ -21246,7 +21470,7 @@ function renderPhotoRequirements(){
     {step: 'gate', label: 'Closed gate photo', off: false, why: '',
      bodies: {}, oneTick: true},
     // Not a photo step of its own: what a technician must do before skipping
-    {step: 'skip', label: 'Require a photo and note to skip a body of water', off: false,
+    {step: 'skip', label: 'Skip body of water photo and note', off: false,
      why: '', bodies: {}, oneTick: true}
   ];
   const own = photoTasks().map(task => ({
@@ -21261,16 +21485,22 @@ function renderPhotoRequirements(){
     block.style.cssText = 'padding:13px 0;border-bottom:1px solid var(--line);'
       + (entry.off ? 'opacity:0.45;' : '');
 
+    // One line (Oct 3): a long name fades out before the count rather than
+    // pushing it down a line
     const head = document.createElement('div');
-    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;'
-      + 'flex-wrap:wrap;padding:4px 0;';
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;'
+      + 'flex-wrap:nowrap;padding:4px 0;';
 
     const left = document.createElement('div');
-    left.style.cssText = 'display:flex;align-items:center;gap:8px;min-width:0;';
+    left.style.cssText = 'display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;';
     const name = document.createElement('div');
-    name.style.cssText = 'font-size:14px;font-weight:600;color:var(--ink);'
+    const fade = 'linear-gradient(to right, #000 calc(100% - 26px), transparent)';
+    name.style.cssText = 'font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;'
+      + 'min-width:0;flex:1 1 auto;-webkit-mask-image:' + fade + ';mask-image:' + fade + ';'
       + (entry.task ? 'cursor:pointer;' : '');
     name.textContent = entry.label;
+    if(!entry.task) name.title = entry.label;
+    setTimeout(()=> marqueeIfCut(name), 0);      // scrolls if it's cut off (Oct 3)
     if(entry.task){
       name.title = 'Change this photo';
       name.dataset.keepsClick = 'name';
@@ -21287,7 +21517,7 @@ function renderPhotoRequirements(){
       edit.className = 'btn btn-ghost';
       edit.textContent = 'Edit';
       edit.title = 'Change this photo';
-      edit.style.cssText = 'width:auto;padding:5px 10px;font-size:12px;';
+      edit.style.cssText = 'width:auto;padding:5px 10px;font-size:12px;flex-shrink:0;';
       edit.dataset.keepsClick = 'edit';
       edit.addEventListener('click', ()=> openPhotoTask(entry.task));
       left.appendChild(edit);
@@ -21300,7 +21530,7 @@ function renderPhotoRequirements(){
       x.textContent = '\u00d7';
       x.title = 'Remove this photo';
       // The same red style, a size down to suit the row
-      x.style.cssText = 'width:24px;height:26px;font-size:13px;border-radius:7px;';
+      x.style.cssText = 'width:24px;height:26px;font-size:13px;border-radius:7px;flex-shrink:0;';
       x.dataset.keepsClick = 'remove';
       x.addEventListener('click', async ()=>{
         const sure = await confirmDialog('Remove "' + escapeSyncText(entry.label)
@@ -21529,11 +21759,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
   window.renderAppPhotoRequirements = show;
 
   // The two tabs on the Technicians page
-  document.querySelectorAll('#techMainTabs .history-type-btn').forEach(btn=>{
+  // Styled as the app's other sub-tabs: the chosen one solid, the other outlined
+  document.querySelectorAll('#techMainTabs [data-techmain]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      document.querySelectorAll('#techMainTabs .history-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('#techMainTabs [data-techmain]').forEach(b => { b.className = 'btn ' + (b === btn ? 'btn-primary' : 'btn-ghost'); });
       const photos = btn.dataset.techmain === 'photos';
       const card = document.getElementById('photoRequireCard');
+      document.getElementById('view-technicians').classList.toggle('photos-mode', photos);
       if(photos){
         ['techListCard', 'techFormCard', 'techRouteCard'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = 'none'; });
         if(card) card.style.display = 'block';
@@ -21559,6 +21791,138 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }, 3000);
   window.addEventListener('online', sendPhotoRequirements);
 })();
+
+// ---- What was done at the pool (Oct 3) ----
+// Thin wide buttons: tap what was done; tapped ones go into the report. Pool
+// only. They sit just under the After Photos heading — or, when this
+// technician has no after photo, at the top of the pool's last page, just
+// under the tabs.
+const SERVICE_TASKS = ['Skimmer basket emptied', 'Pump basket emptied', 'Pool skimmed', 'Walls brushed'];
+const SERVICE_TASK_FIELDS = {'Skimmer basket emptied': 'skimmerBasketEmptied', 'Pump basket emptied': 'pumpBasketEmptied',
+  'Pool skimmed': 'poolSkimmed', 'Walls brushed': 'wallsBrushed'};
+let visitTasksDone = [];
+function drawServiceTasks(){
+  let box = document.getElementById('poolServiceTasks');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'poolServiceTasks';
+    box.className = 'svc-tasks';
+  }
+  const photoCard = document.getElementById('visitPoolPhotoSection');
+  const saveCard = document.getElementById('visitPoolSaveSection');
+  // By what's on screen: the after-photos page showing (with its photos on)
+  // takes them under its heading; otherwise the pool's last page has them
+  const photoShowing = !!(photoCard && photoCard.style.display !== 'none' && photoCard.offsetParent !== null
+    && photoCard.querySelector('h2') && !photoCard.querySelector('h2').classList.contains('photo-part-off'));
+  const saveShowing = !!(saveCard && saveCard.style.display !== 'none' && saveCard.offsetParent !== null);
+  // Just under a page's heading row: the row holding its heading and Back
+  // button when there is one, so they never end up in between them
+  const headRow = card=>{
+    const kids = Array.from(card.children).filter(el => el !== box && el.offsetParent !== null);
+    const withBack = kids.find(el => Array.from(el.querySelectorAll('button')).some(b => /Back/.test(b.textContent))
+      || (el.tagName === 'BUTTON' && /Back/.test(el.textContent)));
+    if(withBack) return withBack;
+    const h2 = card.querySelector('h2');
+    if(h2){ let n = h2; while(n.parentElement && n.parentElement !== card) n = n.parentElement; return n; }
+    return null;
+  };
+  const putUnder = card=>{
+    const row = headRow(card);
+    if(row){ if(row.nextSibling !== box) row.after(box); }
+    else if(card.firstChild !== box) card.insertBefore(box, card.firstChild);
+  };
+  if(!photoShowing && !saveShowing && box.parentNode){ /* neither page is up: leave it where it is */ }
+  else if(photoShowing){
+    putUnder(photoCard);
+    box.style.margin = '10px 0 16px';
+  } else {
+    putUnder(saveCard);
+    box.style.margin = '8px 0 18px';
+  }
+  box.classList.remove('photo-part-off');
+  box.innerHTML = '';
+  SERVICE_TASKS.forEach(task=>{
+    const on = visitTasksDone.indexOf(task) !== -1;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'svc-task' + (on ? ' on' : '');
+    b.textContent = task;
+    b.addEventListener('click', ()=>{
+      const at = visitTasksDone.indexOf(task);
+      if(at === -1) visitTasksDone.push(task); else visitTasksDone.splice(at, 1);
+      drawServiceTasks();
+    });
+    box.appendChild(b);
+  });
+}
+
+// ---- Notes above the after photos (Oct 3) ----
+// On a body of water's last page, its notes sit between what's at the top
+// (the pool's service buttons) and the after photos, which come last. With no
+// after photos on that page they stay where they are, under the buttons.
+const NOTES_PLACES = [['pool', 'inNotes', 'visitPoolPhotoSection', 'visitPoolSaveSection'],
+  ['spa', 'inSpaNotes', 'visitSpaPhotoSection', 'visitSpaSaveSection'],
+  ['fountain', 'inFountainNotes', 'visitFountainPhotoSection', 'visitFountainSaveSection']];
+function placeVisitNotes(){
+  NOTES_PLACES.forEach(([type, notesId, photoId, saveId])=>{
+    const notes = document.getElementById(notesId);
+    const field = notes && notes.closest('.field');
+    const photoCard = document.getElementById(photoId);
+    const saveCard = document.getElementById(saveId);
+    if(!field || !photoCard || !saveCard) return;
+    const h2 = photoCard.querySelector('h2');
+    const photoShowing = photoCard.style.display !== 'none' && photoCard.offsetParent !== null
+      && !!h2 && !h2.classList.contains('photo-part-off');
+    if(photoShowing){
+      // Under the service buttons (pool), or else under the heading row
+      const tasks = type === 'pool' ? document.getElementById('poolServiceTasks') : null;
+      let anchor = tasks && tasks.parentElement === photoCard ? tasks : null;
+      if(!anchor){
+        const kids = Array.from(photoCard.children);
+        anchor = kids.find(el => Array.from(el.querySelectorAll ? el.querySelectorAll('button') : []).some(b => /Back/.test(b.textContent)))
+          || (()=>{ let n = h2; while(n.parentElement && n.parentElement !== photoCard) n = n.parentElement; return n; })();
+      }
+      if(anchor && anchor.nextSibling !== field) anchor.after(field);
+      field.classList.remove('photo-part-off');
+      field.style.margin = '0 0 18px';
+    } else if(field.parentElement !== saveCard){
+      // Back on its own page, under the pool's buttons if they're there
+      const tasks = type === 'pool' ? document.getElementById('poolServiceTasks') : null;
+      if(tasks && tasks.parentElement === saveCard) tasks.after(field);
+      else {
+        const submit = saveCard.querySelector('button.btn-primary');
+        if(submit) saveCard.insertBefore(field, submit); else saveCard.appendChild(field);
+      }
+      field.style.margin = '';
+    }
+  });
+}
+
+// ---- Cut-off text scrolls (Oct 3) ----
+// Give it an element whose text may be cut off (overflow hidden, one line):
+// if it is, the text slides left to show the rest, pauses, and starts over.
+// Text that fits stays still.
+function marqueeIfCut(el){
+  if(!el) return;
+  let inner = el.querySelector(':scope > .marquee-inner');
+  if(!inner){
+    inner = document.createElement('span');
+    inner.className = 'marquee-inner';
+    while(el.firstChild) inner.appendChild(el.firstChild);
+    el.appendChild(inner);
+  }
+  requestAnimationFrame(()=>{
+    const over = inner.scrollWidth - el.clientWidth + 30;      // past the fade at the edge
+    if(inner.scrollWidth > el.clientWidth + 1 && over > 0){
+      el.style.setProperty('--marquee-shift', (-over) + 'px');
+      // About 40 pixels a second, plus the pauses at each end
+      el.style.setProperty('--marquee-time', Math.max(4, over / 40 / 0.64).toFixed(1) + 's');
+      el.classList.add('marquee-on');
+    } else {
+      el.classList.remove('marquee-on');
+    }
+  });
+}
 </script>
 </body>
 </html>
