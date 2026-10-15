@@ -203,6 +203,10 @@ textarea{min-height:52px;resize:vertical;}
 .recent-table tr.rt-group td{background:var(--surface-alt);color:var(--muted);font-weight:600;text-align:left;font-size:11.5px;}
 .recent-table tr.rt-group td.rt-name{background:var(--surface-alt);color:var(--muted);}
 .recent-table .rt-name{position:sticky;left:0;text-align:left;background:var(--card);font-weight:600;color:var(--ink);min-width:92px;}
+/* The name column keeps one width (Oct 13): a name too long for it scrolls
+   across, as the cut-off names on Photo requirements do */
+.recent-table .rt-nm{width:116px;max-width:116px;overflow:hidden;white-space:nowrap;}
+.recent-table .rt-nm.marquee-on{-webkit-mask-image:linear-gradient(90deg,#000 82%,transparent);mask-image:linear-gradient(90deg,#000 82%,transparent);}
 .recent-table th.rt-name{background:var(--teal-pale);color:var(--teal-deep);}
 .recent-table td.rt-val{font-family:'JetBrains Mono',monospace;color:var(--ink);}
 .recent-table td.rt-none{color:var(--muted);}
@@ -343,6 +347,7 @@ textarea{min-height:52px;resize:vertical;}
   82%, 100% { transform: translateX(var(--marquee-shift, 0px)); }
 }
 .marquee-inner{display:inline-block;white-space:nowrap;will-change:transform;}
+.cust-name-text.marquee-on{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);}
 .marquee-on .marquee-inner{animation:weirMarquee var(--marquee-time, 6s) ease-in-out infinite;}
 /* Technicians → Photo requirements: only its own card shows, whatever else
    redraws the list underneath (Oct 3) */
@@ -929,7 +934,7 @@ select#customerSelect{font-weight:600;}
     </div>
     <div class="card" id="techListCard">
       <h2>Technicians</h2>
-      <p class="voice-hint" style="margin:-6px 0 14px;">Technicians are managed on the website — tap one here to see their route or edit their details.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Technicians are managed on the website — tap one here to see their route or edit their details.</p>
       <div id="techList"></div>
     </div>
 
@@ -1015,7 +1020,11 @@ select#customerSelect{font-weight:600;}
     </div>
     <div id="custPaneList">
     <div class="card" id="newCustomerCard" style="display:none;">
-      <h2 id="newCustomerHeading">New customer</h2>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h2 id="newCustomerHeading" style="margin-right:auto;">New customer</h2>
+        <!-- Admins only (Oct 12): send this customer's address or contact on -->
+        <button type="button" class="btn btn-ghost" id="ncShareBtn" style="display:none;width:auto;padding:7px 14px;font-size:13px;">Share</button>
+      </div>
       <div class="field"><label>Name</label><input id="ncName" placeholder="Jordan Ellis"></div>
       <div class="field" style="position:relative;">
         <label>Address</label>
@@ -1091,6 +1100,7 @@ select#customerSelect{font-weight:600;}
     </div>
     <div class="card" id="yourCustomersCard">
       <h2>Your customers</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Search to find a customer, or add a new one.</p>
       <div style="position:relative;margin-bottom:12px;">
         <input id="adminCustomerSearch" placeholder="Search by name, address, phone, or email" style="padding-right:38px;">
         <button type="button" id="btnClearAdminCustomerSearch" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);height:26px;width:26px;padding:0;border:none;background:none;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;align-items:center;justify-content:center;">×</button>
@@ -1116,6 +1126,8 @@ select#customerSelect{font-weight:600;}
     <div id="reportModeReports">
     <div class="card">
       <h2>Service reports</h2>
+      <!-- Every tab: heading, then one line on what it's for (Oct 8) -->
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Every report for a customer, newest first. Pick a customer, then press a report to open it.</p>
       <div class="field" style="position:relative;">
         <label>Customer</label>
         <input id="reportCustomerSearch" placeholder="Search customers by name, address, phone, or email" autocomplete="off" style="padding-right:38px;">
@@ -1143,6 +1155,7 @@ select#customerSelect{font-weight:600;}
             <option value="report">Reports</option>
             <option value="wo">Work orders</option>
             <option value="fc">Filter cleans</option>
+            <option value="pd">Pool drains</option>
             <option value="task">Tasks</option>
           </select>
         </div>
@@ -2017,6 +2030,29 @@ function isChlorineProduct(doseKey, lists){
   return /\b(tab|tabs|chlorine|bleach|hypochlorite|trichlor|dichlor|cal-hypo)\b/.test(text);
 }
 
+// A dosage's name, looked up on every standard list
+function doseNameAnywhere(doseKey){
+  for(const t of ['pool', 'spa', 'fountain']){
+    const d = (((chemConfig[t] || {}).dosages) || []).find(x => x && x.key === doseKey);
+    if(d) return d.label || d.key;
+  }
+  return '';
+}
+// The key of a rule's dosage on THIS list: the same key if it's here,
+// otherwise the dosage here with the same name (Oct 13)
+function ruleDoseKeyHere(doseKey, chem, type, lists){
+  const here = (lists && lists.dosages) || [];
+  if(here.some(d => d && d.key === doseKey)) return doseKey;
+  const norm = v => String(v || '').trim().toLowerCase();
+  let name = '';
+  const from = [chem && chem.doseRulesFrom, type, 'pool', 'spa', 'fountain'].filter(Boolean);
+  for(const t of from){
+    const d = (((chemConfig[t] || {}).dosages) || []).find(x => x && x.key === doseKey);
+    if(d){ name = d.label; break; }
+  }
+  const match = name && here.find(d => d && norm(d.label) === norm(name));
+  return match ? match.key : doseKey;
+}
 function applyDoseRules(type){
   const cid = currentVisitCustomerId;
   const lists = cid
@@ -2041,11 +2077,17 @@ function applyDoseRules(type){
     if(!readEl) return;
     const reading = readEl.value;
 
-    rules.forEach(rule=>{
-      if(!rule || !rule.doseKey){
+    rules.forEach(rule0=>{
+      if(!rule0 || !rule0.doseKey){
         noteRuleProblem((chem.label || chem.key) + ': a rule has no dosage chosen');
         return;
       }
+      // Borrowed rules (Extra following Spa, a custom setup following the
+      // standard list) name the other list's dosage. Each list gives its
+      // dosages their own key, so the same product here is matched by name
+      // (Oct 13: Extra's pH followed Spa's "add Sodium bicarbonate" rule, and
+      // Extra's own Sodium bicarbonate has a different key).
+      const rule = Object.assign({}, rule0, {doseKey: ruleDoseKeyHere(rule0.doseKey, chem, type, lists)});
       // A salt pool makes its own chlorine, so rules adding a chlorine product
       // are skipped. Turned off per reading (and per customer) where the office
       // still wants them to fire — a failing cell, or a pool that gets both.
@@ -2066,8 +2108,9 @@ function applyDoseRules(type){
 
       const doseId = fieldId(type, 'dose', rule.doseKey);
       if(!document.getElementById(doseId)){
-        noteRuleProblem((chem.label || chem.key)
-          + ': rule points at a dosage not on this list');
+        const nm = doseNameAnywhere(rule.doseKey);
+        noteRuleProblem((chem.label || chem.key) + ': a rule adds '
+          + (nm ? nm : 'a dosage') + ', which is not on this list');
         return;
       }
 
@@ -2522,8 +2565,44 @@ function renderConfigFields(containerId, list, type, kind, onInput){
 function listsForBody(customerId, bodyKey, fallbackType){
   const custom = lsGet('customChemConfig') || {};
   const forCust = custom[customerId];
-  if(forCust && forCust[bodyKey]) return forCust[bodyKey];
+  if(forCust && forCust[bodyKey]){
+    // Their quick buttons are the company's unless changed for them (Oct 15)
+    const own = JSON.parse(JSON.stringify(forCust[bodyKey]));
+    return followCompanyButtons(own, chemConfig[fallbackType], custom);
+  }
   return chemConfig[fallbackType];
+}
+
+// The website's rule, the same here (customer-intake.html, Oct 15): a
+// customer's setup is a copy of the company lists from when it was made, so
+// buttons since taken off the company lists stayed on it. Each reading and
+// dosage shows the company's buttons unless the office changed that
+// customer's (buttonsOwn). Older setups with no mark: a set no other customer
+// has is theirs; a set several share came from an old company list.
+function followCompanyButtons(setup, company, everyone){
+  if(!setup || !company) return setup;
+  const vals = b => (Array.isArray(b) ? b : []).map(x => String(btnValue(x)));
+  const same = (a, b) => vals(a).join('|') === vals(b).join('|');
+  ['chemicals', 'dosages'].forEach(part=>{
+    (setup[part] || []).forEach(item=>{
+      if(!item || !item.key || item.buttonsOwn === true) return;
+      const theirs = (company[part] || []).find(x => x && x.key === item.key);
+      if(!theirs || !Array.isArray(theirs.buttons)) return;
+      if(item.buttonsOwn !== false && !same(item.buttons, theirs.buttons)){
+        let shared = 0;
+        Object.keys(everyone || {}).forEach(cid => Object.keys(everyone[cid] || {}).forEach(body=>{
+          const s = everyone[cid][body];
+          ((s && s[part]) || []).forEach(x=>{
+            if(x && x.key === item.key && Array.isArray(x.buttons) && same(x.buttons, item.buttons)) shared++;
+          });
+        }));
+        if(shared <= 1) return;
+      }
+      item.buttons = JSON.parse(JSON.stringify(theirs.buttons));
+      if(theirs.buttonsOrdered === true) item.buttonsOrdered = true; else delete item.buttonsOrdered;
+    });
+  });
+  return setup;
 }
 
 // The readings page: every visit in the last 4 weeks for this body of water,
@@ -2531,6 +2610,11 @@ function listsForBody(customerId, bodyKey, fallbackType){
 // as the fields below). Swipes sideways; the reading names stay put. Nothing
 // shows when there were no visits in that time.
 const RECENT_READINGS_DAYS = 91;      // 3 months (Sept 30; was 4 weeks)
+// Re-measures the history table's names once its box has a width (Oct 13)
+function runMarqueeFor(box){
+  if(!box || !box.offsetWidth) return;
+  box.querySelectorAll('.rt-nm').forEach(el => { try{ marqueeIfCut(el); }catch(e){} });
+}
 async function renderRecentReadings(type, chemList, doseList){
   const box = document.getElementById(type + 'RecentReadings');
   const cid = currentVisitCustomerId;
@@ -2569,11 +2653,11 @@ async function renderRecentReadings(type, chemList, doseList){
   let html = '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 0 6px;">'
     + '<span style="font-size:13px;font-weight:700;color:var(--teal-deep);">Last 3 months</span>'
     + '<span style="font-size:11px;color:var(--muted);">scroll for more</span>'
-    + '</div><div class="recent-wrap fixed"><table class="recent-table"><thead><tr><th class="rt-name">Reading</th>';
+    + '</div><div class="recent-wrap fixed"><table class="recent-table"><thead><tr><th class="rt-name"><div class="rt-nm">Reading</div></th>';
   visits.forEach(v => { html += '<th>' + esc(day(v.date)) + (v.skipped ? ' <span style="font-size:10.5px;color:var(--rust);font-weight:600;">\u00b7 Skipped</span>' : '') + '</th>'; });
   html += '</tr></thead><tbody>';
   chemList.forEach(ch=>{
-    html += '<tr><td class="rt-name">' + esc(ch.label || ch.key) + '</td>';
+    html += '<tr><td class="rt-name"><div class="rt-nm">' + esc(ch.label || ch.key) + '</div></td>';
     visits.forEach(v=>{
       const val = v[ch.key];
       html += shown(val) ? '<td class="rt-val">' + esc(String(val)) + '</td>' : '<td class="rt-none">\u2014</td>';
@@ -2583,11 +2667,11 @@ async function renderRecentReadings(type, chemList, doseList){
   // What was put in at each of those visits, when the company has it on
   const doses = (appSettings && appSettings.showRecentDosages !== false && Array.isArray(doseList)) ? doseList : [];
   if(doses.length){
-    html += '<tr class="rt-group"><td class="rt-name">Chemicals added</td>' + visits.map(()=> '<td></td>').join('') + '</tr>';
+    html += '<tr class="rt-group"><td class="rt-name"><div class="rt-nm">Chemicals added</div></td>' + visits.map(()=> '<td></td>').join('') + '</tr>';
     const builtIn = key => { for(const b of ['pool', 'spa', 'fountain']){ const f = ((DEFAULT_CHEM_CONFIG[b] || {}).dosages || []).find(x => x.key === key); if(f && f.unit) return f.unit; } return ''; };
     doses.forEach(d=>{
       const unit = d.unit || builtIn(d.key);
-      html += '<tr><td class="rt-name">' + esc(d.label || d.key) + '</td>';
+      html += '<tr><td class="rt-name"><div class="rt-nm">' + esc(d.label || d.key) + '</div></td>';
       visits.forEach(v=>{
         const val = v[d.key];
         const has = shown(val) && parseFloat(val) !== 0;
@@ -2599,6 +2683,13 @@ async function renderRecentReadings(type, chemList, doseList){
   html += '</tbody></table></div>';
   box.style.marginBottom = '14px';
   box.innerHTML = html;
+  // Names too long for the column scroll across (Oct 13). A body of water not
+  // on screen yet has no width to measure, so it's measured again once it shows.
+  setTimeout(()=> runMarqueeFor(box), 0);
+  if(!box._rtWatch && typeof ResizeObserver === 'function'){
+    box._rtWatch = new ResizeObserver(()=> runMarqueeFor(box));
+    box._rtWatch.observe(box);
+  }
 }
 
 function renderAllConfigFields(){
@@ -2851,11 +2942,29 @@ var tabScrollAt = {};
 var tabHiddenAt = 0, viewEnteredAt = Date.now();
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ tabHiddenAt = Date.now(); return; }
-  // Back on the Customer tab itself after 30 seconds away: Customers again
-  if(currentViewName === 'customers' && tabHiddenAt > viewEnteredAt && Date.now() - tabHiddenAt >= TAB_KEEP_MS){
-    try{ if(typeof showCustomerPane === 'function') showCustomerPane('list'); }catch(e){}
-  }
+  // Oct 12: coming back to the app leaves every page exactly as it was (the
+  // Customer tab used to go back to its list after 30 seconds away)
+  // Oct 15: except the day on Today — coming back always shows today
+  todayOnReturn();
 });
+// Today's list back on today whenever the app comes back to the front: from
+// another app, the home screen, the phone waking, or the browser bringing the
+// page back from its cache
+function todayOnReturn(){
+  try{
+    if(document.hidden) return;
+    if(currentViewName === 'home' && !busyForOpenOnToday()){
+      const today = DAYS_OF_WEEK[new Date().getDay()];
+      if(selectedHomeDay !== today || weekOffset !== 0){
+        selectedHomeDay = today; weekOffset = 0;
+        renderHomeList();
+      }
+    }
+  }catch(e){}
+}
+// (Not on focus: the phone's own date picker takes focus and gives it back,
+// which would undo the day just picked)
+window.addEventListener('pageshow', e=>{ if(e.persisted) todayOnReturn(); });
 function switchView(view, opts){
   opts = opts || {};
   if(view !== 'technicians' && typeof techOrderPending !== 'undefined' && techOrderPending) endTechOrder();
@@ -3118,7 +3227,7 @@ function lsSet(key, value){
     // Finishing a work order or filter clean is sent straight away too (Oct 3;
     // it used to wait for the once-a-minute sync)
     if(key === 'customers' || key === 'tasks' || key === 'rescheduledVisits'
-     || key === 'scheduledWorkOrders' || key === 'scheduledFilterCleans' || key === 'jobSubmissions'
+     || key === 'scheduledWorkOrders' || key === 'scheduledFilterCleans' || key === 'scheduledPoolDrains' || key === 'jobSubmissions'
      || key.indexOf('readings:') === 0 || key.indexOf('spaReadings:') === 0
      || key.indexOf('fountainReadings:') === 0 || key.indexOf('skippedVisits:') === 0){
       try{ if(typeof fieldNoteLocalChange === 'function') fieldNoteLocalChange(); }catch(e){}
@@ -3313,7 +3422,8 @@ function deviceSet(key, value){
 
 async function fieldFetch(path, opts, withSession){
   const o = opts || {};
-  const headers = {'apikey': FIELD_SUPABASE_KEY, 'Content-Type': 'application/json'};
+  // Any headers the call adds of its own (Prefer, say) are kept (Oct 15)
+  const headers = Object.assign({'apikey': FIELD_SUPABASE_KEY, 'Content-Type': 'application/json'}, o.headers || {});
   const s = deviceGet('session');
   if(withSession !== false && s && s.access_token) headers['Authorization'] = 'Bearer ' + s.access_token;
   let res;
@@ -3772,6 +3882,8 @@ const SYNC_SETUP_KEYS = ['chemConfig', 'customChemConfig', 'customBodyOrder', 'r
                          'technicianOrder',
                          'reportEmailStyle', 'customerGroups', 'photoDefaults', 'photoEveryone',
                          'photoDefaultsSeeded'];
+const OFFICE_ONLY_SETUP = ['filterGroups', 'drainCalendar', 'workOrders', 'serviceCalls', 'filterCleanEmail',
+  'drainEmailSoon', 'drainEmailScheduled', 'broadcastTemplates', 'broadcastCategories'];
 const SYNC_COMPANY_DETAIL_KEYS = ['companyName', 'ownerName', 'licenseNumber', 'serviceArea',
   'accountEmail', 'accountPhone', 'businessAddress', 'businessCity', 'businessState',
   'businessZip', 'businessWebsite'];
@@ -4049,6 +4161,16 @@ function syncApplyRecord(kind, id, data, deleted, agreed){
   }
   if(kind === 'setup'){
     if(deleted || !('value' in data)) return true;
+    // The office's own lists (Oct 14): the website's filter clean groups, drain
+    // calendar, quotes sent and email wording. The phones get the jobs made from
+    // them, so these aren't kept here, which saves the phone's room.
+    if(OFFICE_ONLY_SETUP.indexOf(id) !== -1) return true;
+    // Emails that didn't go out: added to, never swapped, so a failure noted
+    // here and not yet sent isn't lost (Oct 8)
+    if(id === 'emailFailures'){
+      const here = lsGet('emailFailures') || {};
+      return lsSet('emailFailures', Object.assign({}, here, (data.value && typeof data.value === 'object') ? data.value : {}));
+    }
     if(id === 'routeOrders') officeRouteOrderArrived(lsGet('routeOrders'), data.value);
     if(id === 'routeOrdersOnce') officeOnceOrderArrived(lsGet('routeOrdersOnce'), data.value);
     const saved = lsSet(id, data.value);
@@ -4434,16 +4556,23 @@ async function syncPushVisits(state){
 const SYNC_WORK_LISTS = [
   ['tasks', 'task'],
   ['scheduledFilterCleans', 'filter_clean'],
+  ['scheduledPoolDrains', 'pool_drain'],
   ['scheduledWorkOrders', 'work_order'],
-  ['rescheduledVisits', 'reschedule']
+  ['rescheduledVisits', 'reschedule'],
+  // Quotes (Oct 15): the website's quotes, on an owner's or admin's phone for
+  // the WorkCenter's Quote tab. Made here they're sent whole (pushOfficeWork);
+  // the server never gives them to a technician (snippet 33).
+  ['workOrders', 'quote']
 ];
 // Finishing a task or a work order visit goes back too: done, when, by whom
 // and the notes (snippet 16 lets a technician change exactly these on their own),
 // and a work order's photo and video (snippet 25, Oct 3)
-const SYNC_WORK_SENDABLE = ['task', 'reschedule', 'work_order', 'filter_clean'];
-const SYNC_FILTER_CLEAN_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements'];
-const SYNC_TASK_FIELDS = ['done', 'doneAt', 'doneBy', 'doneNotes', 'doneVideo', 'doneVideoMore'];
-const SYNC_WORK_ORDER_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements'];
+const SYNC_WORK_SENDABLE = ['task', 'reschedule', 'work_order', 'filter_clean', 'pool_drain'];
+// doneDurationMs: how long the job took (Oct 10, snippet 32)
+// doneExtraWork: the extra work ticked off on a filter clean or pool drain (Oct 14, snippet 33)
+const SYNC_FILTER_CLEAN_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements', 'doneDurationMs', 'doneExtraWork'];
+const SYNC_TASK_FIELDS = ['done', 'doneAt', 'doneBy', 'doneNotes', 'doneVideo', 'doneVideoMore', 'doneDurationMs'];
+const SYNC_WORK_ORDER_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements', 'doneDurationMs'];
 
 // A work order submitted before its photo and video went to the office (Oct 3)
 // kept them only in this phone's submissions: hang them on the visit now, so
@@ -4504,6 +4633,7 @@ function syncScanWork(state, now){
       if(key.indexOf('task\u0002') === 0 && SYNC_TASK_FIELDS.indexOf(field) === -1) return;
       if(key.indexOf('work_order\u0002') === 0 && SYNC_WORK_ORDER_FIELDS.indexOf(field) === -1) return;
       if(key.indexOf('filter_clean\u0002') === 0 && SYNC_FILTER_CLEAN_FIELDS.indexOf(field) === -1) return;
+      if(key.indexOf('pool_drain\u0002') === 0 && SYNC_FILTER_CLEAN_FIELDS.indexOf(field) === -1) return;
       const noticed = prev && prev[field] === f[field];
       if(!noticed || !e[field]) e[field] = stamp;
     });
@@ -4567,10 +4697,21 @@ async function syncPushWork(state){
     });
     if(!Object.keys(changes).length){ delete wk.edits[key]; continue; }
     const k = wk.known[key] || (state.records && state.records.known && state.records.known[key]);
-    const res = await fieldAuthed('/rest/v1/rpc/push_record_fields', {
+    let res = await fieldAuthed('/rest/v1/rpc/push_record_fields', {
       method: 'POST',
       body: JSON.stringify({p_kind: kind, p_id: id, p_changes: changes, p_base: k && k.u ? k.u : null})
     });
+    // An office that doesn't take a job's time yet (before snippet 32): the
+    // job still goes, without its time, rather than being set aside (Oct 10)
+    if((res.status === 400 || res.status === 403) && changes.doneDurationMs){
+      delete changes.doneDurationMs;
+      if(Object.keys(changes).length){
+        res = await fieldAuthed('/rest/v1/rpc/push_record_fields', {
+          method: 'POST',
+          body: JSON.stringify({p_kind: kind, p_id: id, p_changes: changes, p_base: k && k.u ? k.u : null})
+        });
+      }
+    }
     if(res.offline || res.revoked || res.status === 0) return {ok: false, offline: !!res.offline, pushed: pushed, refused: refused};
     if(res.status === 400 || res.status === 403){
       // The office does not allow this one. Keeping it would block the rest, and
@@ -4944,7 +5085,7 @@ function syncPhotosHere(){
   // the work order visit, so the office shows them in Service reports; the
   // video is office only and kept 7 days, like a visit's.
   (lsGet('jobSubmissions') || []).forEach(sub=>{
-    if(!sub || (sub.kind !== 'work order' && sub.kind !== 'filter clean' && sub.kind !== 'task') || !sub.customerId || !sub.sourceId) return;
+    if(!sub || (sub.kind !== 'work order' && sub.kind !== 'filter clean' && sub.kind !== 'pool drain' && sub.kind !== 'task') || !sub.customerId || !sub.sourceId) return;
     const when = sub.submittedAt || new Date().toISOString();
     add(sub.photo, {customerId: String(sub.customerId), kind: 'custom', visitId: String(sub.sourceId), takenAt: when});
     add(sub.video, {customerId: String(sub.customerId), kind: 'video', visitId: String(sub.sourceId), takenAt: when});
@@ -5833,10 +5974,22 @@ function photoBodyType(type){
   return singleBodyVisit() ? 'pool' : type;
 }
 
+// The signed-in technician's profile as it is now: their photo ticks can be
+// changed on the website at any time, and the copy made at sign-in kept the
+// old ones until the app was restarted (Oct 13)
+function liveMe(){
+  if(!currentUser) return null;
+  try{
+    const t = (lsGet('technicians') || []).find(x => x && String(x.id) === String(currentUser.id));
+    if(t) return t;
+  }catch(e){}
+  return currentUser;
+}
 function techWantsPhoto(step, type){
   type = photoBodyType(type);
   const key = type === 'spa' ? 'spa' : (type === 'pool' ? 'pool' : 'fountain');
-  const rules = currentUser && currentUser.photoRules;
+  const me = liveMe();
+  const rules = me && me.photoRules !== undefined ? me.photoRules : (currentUser && currentUser.photoRules);
   // Asked of them by name, or of everyone
   if(rules && rules[step] && rules[step][key] === true) return true;
   if(photoEveryoneOn(step, key)) return true;
@@ -5850,7 +6003,8 @@ function techOptionalPhoto(step){
   // The after photo is always on a service report's last page, optional
   // unless a tick makes it required for that body of water (Oct 3)
   if(step === 'after') return true;
-  const opt = currentUser && currentUser.photoOptional;
+  const me = liveMe();
+  const opt = me && me.photoOptional !== undefined ? me.photoOptional : (currentUser && currentUser.photoOptional);
   return !!(opt && opt[step] === true) || photoEveryoneOn(step, 'optional');
 }
 
@@ -7351,6 +7505,7 @@ function resetCustomerForm(){
   ncFountains = []; renderNcFountainFields();
   ncDogs = []; renderNcDogFields();
   document.getElementById('newCustomerHeading').textContent = 'New customer';
+  { const sb = document.getElementById('ncShareBtn'); if(sb) sb.style.display = 'none'; }
   document.getElementById('btnSaveCustomer').textContent = 'Save customer';
 }
 
@@ -8832,6 +8987,7 @@ function renderTechRoute(){
     cst.technicianId === selectedTechId
     && customerServicedOn(cst, techRouteDay)
     && cst.active !== false
+    && !skipsThisDay(cst, iso)
     && !movedAway.has(cst.id));
 
   const movedWho = movedOntoDate(reschedules, iso);
@@ -9048,6 +9204,10 @@ function techRouteJobsFor(techId, iso){
     out.push({kind: 'filter clean', id: f.id, key: 'filter clean:' + f.id, report: 'fc:' + f.id, title: 'Filter clean', customerId: f.customerId,
       done: f.status === 'done', doneAt: f.doneAt, date: f.date, technicianId: f.technicianId});
   });
+  (lsGet('scheduledPoolDrains') || []).filter(f => f && f.date === iso && mine(f)).forEach(f=>{
+    out.push({kind: 'pool drain', id: f.id, key: 'pool drain:' + f.id, report: 'pd:' + f.id, title: drainTitle(f), customerId: f.customerId,
+      done: f.status === 'done', doneAt: f.doneAt, date: f.date, technicianId: f.technicianId});
+  });
   (lsGet('tasks') || []).filter(t => t && t.date === iso && mine(t)).forEach(t=>{
     const ids = (t.customerIds || []).length ? t.customerIds : [''];
     ids.forEach(cid => out.push({kind: 'task', id: t.id, key: 'task:' + t.id + ':' + cid, report: '', title: t.title || 'Task', customerId: cid,
@@ -9079,8 +9239,7 @@ function techRouteJobRow(job, iso, onReorder){
   name.className = 'cust-name';
   name.style.cssText = "font-family:'Space Grotesk',sans-serif;font-weight:700;color:" + jobKindColours(job.kind)[1] + ';'
     + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  name.textContent = jobKindIcon(job.kind) + ' '
-    + (customer ? customer.name + ' \u2013 ' : '') + job.title;
+  setJobNameLine(name, job.kind, (customer ? customer.name + ' \u2013 ' : '') + job.title);
   if(job.done){
     const tag = document.createElement('span');
     tag.style.cssText = 'background:var(--green);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;vertical-align:middle;margin-left:6px;';
@@ -9164,8 +9323,8 @@ function openJobRescheduleModal(job){
     const toISO = dateEl.value;
     const tech = techEl.value !== ownId ? techEl.value : null;
     if(!toISO && !tech){ showToast('Pick a date or another technician first'); return; }
-    const listKey = job.kind === 'task' ? 'tasks' : job.kind === 'filter clean' ? 'scheduledFilterCleans' : 'scheduledWorkOrders';
-    const syncKind = job.kind === 'task' ? 'task' : job.kind === 'filter clean' ? 'filter_clean' : 'work_order';
+    const listKey = job.kind === 'task' ? 'tasks' : job.kind === 'filter clean' ? 'scheduledFilterCleans' : job.kind === 'pool drain' ? 'scheduledPoolDrains' : 'scheduledWorkOrders';
+    const syncKind = job.kind === 'task' ? 'task' : job.kind === 'filter clean' ? 'filter_clean' : job.kind === 'pool drain' ? 'pool_drain' : 'work_order';
     const list = lsGet(listKey) || [];
     const rec = list.find(x => x && String(x.id) === String(job.id));
     if(!rec){ close(); showToast('This ' + label + ' is no longer here'); return; }
@@ -10423,8 +10582,17 @@ function routeJobsFor(customerId, dayISO, techId){
     .filter(s => s && s.status === 'scheduled' && s.date === dayISO && s.customerId === customerId && mine(s))
     .map(s => ({key: 'filter clean:' + s.id, kind: 'filter clean', id: s.id,
                 // Only when the group's Photo required was ticked (Oct 3)
-                title: 'Filter clean', details: '', photoRequired: s.photoRequired === true, videoRequired: false}));
-  return orders.concat(cleans).concat(tasks).filter(j => !jobSubmitted(j.key));
+                title: 'Filter clean', details: '', photoRequired: s.photoRequired === true, videoRequired: false,
+                // Extra work the office added on the calendar's day window (Oct 13)
+                lineItems: Array.isArray(s.lineItems) ? s.lineItems : []}));
+  // Pool drains, sent from the website's Pool drains page (Oct 10)
+  const drains = (lsGet('scheduledPoolDrains') || [])
+    .filter(s => s && s.status === 'scheduled' && s.date === dayISO && s.customerId === customerId && mine(s))
+    .map(s => ({key: 'pool drain:' + s.id, kind: 'pool drain', id: s.id,
+                title: drainTitle(s), details: s.notes || '', photoRequired: s.photoRequired === true, videoRequired: false,
+                // Extra work the office added on the drain calendar, ticked off like a work order's items (Oct 13)
+                lineItems: Array.isArray(s.lineItems) ? s.lineItems : []}));
+  return orders.concat(cleans).concat(drains).concat(tasks).filter(j => !jobSubmitted(j.key));
 }
 // The Replacements window on a filter clean (Oct 3): the usual parts to tick,
 // any number of them, and a box for anything else. Done (or a tap outside)
@@ -10494,14 +10662,45 @@ function openReplacementsPicker(current, onDone){
 function jobKindColours(kind){
   return kind === 'task' ? ['#E8F1E4', '#4D6B3C']
     : kind === 'filter clean' ? ['#FBF1DD', '#8A5E0B']
+    : kind === 'pool drain' ? ['#C3DEF3', '#174C78']      // sky blue (Oct 15), apart from the work order grey
     : ['#E9EEF0', '#3E5560'];
 }
 // Each kind's icon (Oct 3): work order 🛠, filter clean 🚿, task 📋
 function jobKindIcon(kind){
-  return kind === 'task' ? '\ud83d\udccb' : kind === 'filter clean' ? '\ud83d\udebf' : '\ud83d\udee0';
+  return kind === 'task' ? '\ud83d\udccb' : kind === 'filter clean' ? '\ud83d\udebf' : kind === 'pool drain' ? '' : '\ud83d\udee0';
 }
 function jobKindLabel(kind){
-  return kind === 'task' ? 'Task' : (kind === 'filter clean' ? 'Filter clean' : 'Work order');
+  return kind === 'task' ? 'Task' : kind === 'filter clean' ? 'Filter clean' : kind === 'pool drain' ? 'Pool drain' : 'Work order';
+}
+// Which body of water a drain is for (Oct 10): its name on the route and report
+function drainTitle(rec){
+  // The body's own name when the office sent it ("Koi pond drain", Oct 13)
+  if(rec && rec.bodyName) return rec.bodyName + ' drain';
+  const k = rec && rec.bodyKind;
+  return k === 'spa' ? 'Spa drain' : k === 'fountain' ? 'Fountain drain' : k === 'extra' ? 'Extra body drain' : 'Pool drain';
+}
+// The pool drain's own drawing (Oct 10, F1): a pool, the water low, an arrow down
+let poolDrainIconN = 0;
+function poolDrainIconSvg(w, h){
+  const id = 'pdIco' + (++poolDrainIconN);
+  return '<svg viewBox="0 0 32 28" width="' + (w || 24) + '" height="' + (h || 22) + '" aria-hidden="true" style="vertical-align:-5px;flex-shrink:0;">'
+    + '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A9D8F2"/><stop offset="1" stop-color="#2F7FB3"/></linearGradient></defs>'
+    + '<path d="M3 6v15a4 4 0 0 0 4 4h18a4 4 0 0 0 4-4V6" fill="#fff" stroke="#1F5E86" stroke-width="1.8" stroke-linecap="round"/>'
+    + '<path d="M4 17.5c2.5 0 2.5-1.2 5-1.2s2.5 1.2 5 1.2 2.5-1.2 5-1.2 2.5 1.2 5 1.2 2.5-1.2 4-1.2V21a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" fill="url(#' + id + ')"/>'
+    + '<path d="M16 8v7m-2.6-2.6L16 15l2.6-2.6" fill="none" stroke="#1F5E86" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+// A job's name line: its icon, then the words (the pool drain's icon is a drawing)
+function setJobNameLine(el, kind, text){
+  el.textContent = '';
+  if(kind === 'pool drain'){
+    const ico = document.createElement('span');
+    ico.innerHTML = poolDrainIconSvg();
+    ico.style.cssText = 'display:inline-block;margin-right:5px;';
+    el.appendChild(ico);
+    el.appendChild(document.createTextNode(text));
+  } else {
+    el.textContent = jobKindIcon(kind) + ' ' + text;
+  }
 }
 // Tasks with no customer that day, as jobs of their own
 function routeLooseTasks(dayISO, techId){
@@ -10529,6 +10728,9 @@ function routeJobCustomerIds(dayISO, techId){
   (lsGet('scheduledFilterCleans') || []).filter(s => s && s.status === 'scheduled' && s.date === dayISO && mine(s))
     .sort((a, b) => (typeof a.order === 'number' ? a.order : 9999) - (typeof b.order === 'number' ? b.order : 9999))
     .forEach(s => { if(!jobSubmitted('filter clean:' + s.id)) ids.add(s.customerId); });
+  (lsGet('scheduledPoolDrains') || []).filter(s => s && s.status === 'scheduled' && s.date === dayISO && mine(s))
+    .sort((a, b) => (typeof a.order === 'number' ? a.order : 9999) - (typeof b.order === 'number' ? b.order : 9999))
+    .forEach(s => { if(!jobSubmitted('pool drain:' + s.id)) ids.add(s.customerId); });
   return ids;
 }
 // How many jobs a day holds: every work order and every task counts as one,
@@ -10606,8 +10808,7 @@ function adminVersion_appendRouteJobRows(container, customer, jobs, dayISO, canR
     const nameLine = document.createElement('div');
     nameLine.className = 'cust-name';
     nameLine.style.cssText = 'color:' + jobKindColours(job.kind)[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    nameLine.textContent = jobKindIcon(job.kind) + ' '
-      + (customer ? customer.name + ' \u2013 ' + job.title : job.title);
+    setJobNameLine(nameLine, job.kind, customer ? customer.name + ' \u2013 ' + job.title : job.title);
     const metaLine = document.createElement('div');
     metaLine.className = 'cust-meta';
     metaLine.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
@@ -10666,7 +10867,7 @@ function adminVersion_appendRouteJobRows(container, customer, jobs, dayISO, canR
       if(customer && customer.gateCode) line('\ud83d\udd11 Yard gate', customer.gateCode);
       const dogNames = ((customer && customer.dogs) || []).map(d => d.name).filter(Boolean);
       if(dogNames.length) line(dogNames.length === 1 ? '\ud83d\udc15 Dog' : '\ud83d\udc15 Dogs', dogNames.join(', '));
-      line(jobKindIcon(job.kind) + ' ' + jobKindLabel(job.kind), job.title);
+      line((jobKindIcon(job.kind) ? jobKindIcon(job.kind) + ' ' : '') + jobKindLabel(job.kind), job.title);
       if(job.details) line('Details', job.details);
       // Photo and video requirements are shown on the job screen itself (Oct 3)
 
@@ -10728,8 +10929,7 @@ function techVersion_appendRouteJobRows(container, customer, jobs, dayISO, canRe
     const nameLine = document.createElement('div');
     nameLine.className = 'cust-name';
     nameLine.style.cssText = 'color:' + jobKindColours(job.kind)[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    nameLine.textContent = jobKindIcon(job.kind) + ' '
-      + (customer ? customer.name + ' \u2013 ' + job.title : job.title);
+    setJobNameLine(nameLine, job.kind, customer ? customer.name + ' \u2013 ' + job.title : job.title);
     const metaLine = document.createElement('div');
     metaLine.className = 'cust-meta';
     metaLine.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
@@ -10788,7 +10988,7 @@ function techVersion_appendRouteJobRows(container, customer, jobs, dayISO, canRe
       if(customer && customer.gateCode) line('\ud83d\udd11 Yard gate', customer.gateCode);
       const dogNames = ((customer && customer.dogs) || []).map(d => d.name).filter(Boolean);
       if(dogNames.length) line(dogNames.length === 1 ? '\ud83d\udc15 Dog' : '\ud83d\udc15 Dogs', dogNames.join(', '));
-      line(jobKindIcon(job.kind) + ' ' + jobKindLabel(job.kind), job.title);
+      line((jobKindIcon(job.kind) ? jobKindIcon(job.kind) + ' ' : '') + jobKindLabel(job.kind), job.title);
       if(job.details) line('Details', job.details);
       // Photo and video requirements are shown on the job screen itself (Oct 3)
 
@@ -10839,13 +11039,25 @@ function openJobPage(customer, job){
   head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;';
   const h = document.createElement('h2');
   h.style.cssText = 'margin:0;min-width:0;';
-  h.textContent = jobKindLabel(job.kind);
+  h.textContent = job.kind === 'pool drain' ? (job.title || 'Pool drain') : jobKindLabel(job.kind);
   const back = document.createElement('button');
   back.className = 'btn btn-ghost';
   back.style.cssText = 'width:auto;flex-shrink:0;padding:6px 12px;font-size:12.5px;';
   back.textContent = '\u2190 Return to route';
   head.appendChild(h); head.appendChild(back);
   card.appendChild(head);
+
+  // The time on this job, from when it was first opened, as a visit's (Oct 10).
+  // Kept on this phone until it's submitted, so leaving and coming back carries on.
+  const startedAll = lsGet('jobStartedAt') || {};
+  if(!startedAll[job.key]){ startedAll[job.key] = new Date().toISOString(); lsSet('jobStartedAt', startedAll); }
+  const jobStartedAt = startedAll[job.key];
+  const timer = document.createElement('div');
+  timer.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--teal-deep);margin:-6px 0 10px;";
+  const tick = ()=>{ if(!timer.isConnected && page.isConnected) return; timer.textContent = '\u23f1 ' + formatDuration(Date.now() - new Date(jobStartedAt).getTime()); };
+  tick();
+  const timerIv = setInterval(()=>{ if(!page.isConnected){ clearInterval(timerIv); return; } tick(); }, 1000);
+  card.appendChild(timer);
 
   const who = document.createElement('div');
   who.style.cssText = 'font-family:\'Space Grotesk\',sans-serif;font-weight:700;font-size:17px;color:var(--gold);';
@@ -10858,7 +11070,7 @@ function openJobPage(customer, job){
   card.appendChild(where);
   // A filter clean starts straight at its photos: no customer name or address
   // under "Filter clean" (Oct 3)
-  if(job.kind === 'filter clean'){ who.style.display = 'none'; where.style.display = 'none'; }
+  if(job.kind === 'filter clean' || job.kind === 'pool drain'){ who.style.display = 'none'; where.style.display = 'none'; }
   // A work order shows its line items and a task its name, in black, with no
   // customer name or address (Oct 3)
   const lineChecks = [];       // a work order's line items, all ticked before Submit
@@ -10887,6 +11099,35 @@ function openJobPage(customer, job){
       });
     } else {
       who.textContent = job.title || jobKindLabel(job.kind);
+    }
+  }
+  // A pool drain's extra work from the office (Oct 13): each item with a box to
+  // tick, all ticked before Submit, like a work order's items
+  if(job.kind === 'pool drain' || job.kind === 'filter clean'){   // filter cleans too (Oct 13)
+    // With how many after the name when it's more than one (Oct 13)
+    const extra = (job.lineItems || []).filter(li => li && String(li.description || '').trim())
+      .map(li => String(li.description).trim() + ((Number(li.qty) || 1) > 1 ? ' \u00d7 ' + Number(li.qty) : ''));
+    if(extra.length){
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin:2px 0 14px;';
+      const hd = document.createElement('div');
+      hd.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin:4px 0 2px;";
+      hd.textContent = 'Extra work';
+      wrap.appendChild(hd);
+      extra.forEach((t, i)=>{
+        const line = document.createElement('label');
+        line.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 2px;cursor:pointer;font-size:15px;color:var(--ink);'
+          + (i < extra.length - 1 ? 'border-bottom:1px solid var(--line);' : '');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.cssText = 'width:22px;height:22px;margin:0;flex-shrink:0;';
+        lineChecks.push(cb);
+        const span = document.createElement('span');
+        span.textContent = t;
+        line.appendChild(cb); line.appendChild(span);
+        wrap.appendChild(line);
+      });
+      card.appendChild(wrap);
     }
   }
   if(job.details){
@@ -11072,8 +11313,11 @@ function openJobPage(customer, job){
     const storedMore = storedAll.slice(1).filter(isPhotoRef);
     const videoRef = videoRefs[0] || null;
     const videoMore = videoRefs.slice(1);
+    const durationMs = Math.max(0, Date.now() - new Date(jobStartedAt).getTime());
+    try{ const st = lsGet('jobStartedAt') || {}; delete st[job.key]; lsSet('jobStartedAt', st); }catch(e){}
     const list = jobSubmissions();
     list.push({
+      durationMs: durationMs,
       key: job.key, kind: job.kind, sourceId: job.id,
       customerId: customer ? customer.id : null, customerName: customer ? customer.name : '', title: job.title,
       notes: notes.value.trim(), photo: stored, photoMore: storedMore, video: videoRef, videoMore: videoMore, date: job.dayISO || todayDateStr(),
@@ -11109,6 +11353,9 @@ function openJobPage(customer, job){
             if(x) [x.video].concat(x.videoMore || []).forEach(v => { if(isPhotoRef(v)) vids.push(v); });
           });
           if(vids.length){ t.doneVideo = vids[0]; if(vids.length > 1) t.doneVideoMore = vids.slice(1); }
+          // Its time: every customer's part added up (Oct 10)
+          const total = who.reduce((n, k)=>{ const x = subs.find(y => y.key === k); return n + ((x && x.durationMs) || 0); }, 0);
+          if(total) t.doneDurationMs = total;
           lsSet('tasks', all);
         }
       }
@@ -11121,13 +11368,36 @@ function openJobPage(customer, job){
         fc.doneAt = stamp;
         fc.doneBy = currentUser ? currentUser.id : '';
         fc.doneNotes = noteText;
+        fc.doneDurationMs = durationMs;
         if(isPhotoRef(stored)) fc.donePhoto = stored;
         if(storedMore.length) fc.donePhotoMore = storedMore;
         if(isPhotoRef(videoRef)) fc.doneVideo = videoRef;
         if(videoMore.length) fc.doneVideoMore = videoMore;
         if(replacements.length) fc.doneReplacements = replacements.slice();
+        // Every extra work item was ticked to get here (Oct 13)
+        if(Array.isArray(fc.lineItems) && fc.lineItems.length) fc.doneExtraWork = fc.lineItems.map(li => String((li && li.description) || '').trim()).filter(Boolean);
         lsSet('scheduledFilterCleans', cleans);
-        if(customer) queueJobEmail(customer, Object.assign({kind: 'filter clean'}, fc));
+        // Unless the office unticked Email customer on its group (Oct 11)
+        if(customer && fc.emailCustomer !== false) queueJobEmail(customer, Object.assign({kind: 'filter clean'}, fc));
+      }
+    } else if(job.kind === 'pool drain'){
+      // Done, with the photos and notes, back to the office (Oct 10). The
+      // website logs the drain on the customer from doneAt.
+      const drains = lsGet('scheduledPoolDrains') || [];
+      const pd = drains.find(x => x.id === job.id);
+      if(pd){
+        pd.status = 'done';
+        pd.doneAt = stamp;
+        pd.doneBy = currentUser ? currentUser.id : '';
+        pd.doneNotes = noteText;
+        pd.doneDurationMs = durationMs;
+        // Every extra work item was ticked to get here (Oct 13)
+        if(Array.isArray(pd.lineItems) && pd.lineItems.length) pd.doneExtraWork = pd.lineItems.map(li => String((li && li.description) || '').trim()).filter(Boolean);
+        if(isPhotoRef(stored)) pd.donePhoto = stored;
+        if(storedMore.length) pd.donePhotoMore = storedMore;
+        if(isPhotoRef(videoRef)) pd.doneVideo = videoRef;
+        if(videoMore.length) pd.doneVideoMore = videoMore;
+        lsSet('scheduledPoolDrains', drains);
       }
     } else {
       const jobs = lsGet('scheduledWorkOrders') || [];
@@ -11137,6 +11407,7 @@ function openJobPage(customer, job){
         j.doneAt = stamp;
         j.doneBy = currentUser ? currentUser.id : '';
         j.doneNotes = noteText;
+        j.doneDurationMs = durationMs;
         // The photo and video go to the office with it (Oct 3)
         if(isPhotoRef(stored)) j.donePhoto = stored;
         if(storedMore.length) j.donePhotoMore = storedMore;
@@ -11233,10 +11504,102 @@ function servicedForCovers(c, dayISO){
   return c.servicedFor.some(x => x && (x.day === dayISO
     || (x.day > dayISO && !customerServicedOn(c, NAMES[new Date(x.day + 'T12:00:00').getDay()]))));
 }
+// ---- Every other week off (Oct 9) ----
+// A technician can work one week and have the next off for part of the year
+// (Nov to Mar, say), and do repairs in the off weeks. Kept on the technician
+// (offWeeks: {on, from: 'MM-DD', to: 'MM-DD', firstOff: Monday 'YYYY-MM-DD',
+// keep: [customer ids still serviced on off weeks]}), so it travels to the
+// phones with the technician. Weeks run Monday to Sunday.
+function owLocalISO(d){ return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+function owMonday(iso){
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return owLocalISO(d);
+}
+// In the stretch of the year it covers; one running over New Year works too
+function owInSeason(ow, iso){
+  const md = String(iso).slice(5), f = ow.from || '11-01', t = ow.to || '03-31';
+  return f <= t ? (md >= f && md <= t) : (md >= f || md <= t);
+}
+function owWork(ow){ return Math.min(8, Math.max(1, Number(ow && ow.work) || 1)); }
+function owOff(ow){ return Math.min(8, Math.max(1, Number(ow && ow.off) || 1)); }
+function owIsOffWeek(ow, iso){
+  if(!ow || !ow.on || !ow.firstOff || !iso || !owInSeason(ow, iso)) return false;
+  const weeks = Math.round((new Date(owMonday(iso) + 'T12:00:00') - new Date(owMonday(ow.firstOff) + 'T12:00:00')) / (7 * 86400000));
+  // Any pattern (Oct 9): work so many weeks, then off so many, and repeat.
+  // firstOff starts a run of off weeks. 1 and 1 is every other week.
+  const work = owWork(ow), off = owOff(ow), cycle = work + off;
+  return (((weeks % cycle) + cycle) % cycle) < off;
+}
+function owFor(techId){
+  if(!techId) return null;
+  const t = (lsGet('technicians') || []).find(x => x && String(x.id) === String(techId));
+  return t && t.offWeeks && t.offWeeks.on ? t.offWeeks : null;
+}
+// Left off that day's route: their technician's off week, and not one of the
+// customers still serviced on off weeks
+function offWeekSkips(c, iso){
+  if(!c || !c.technicianId) return false;
+  const ow = owFor(c.technicianId);
+  return !!ow && owIsOffWeek(ow, iso) && (ow.keep || []).indexOf(c.id) === -1;
+}
+
+// ---- How often a customer is serviced (Oct 9) ----
+// On the customer: frequency '' (every week), 'every2' / 'every3' / 'every4'
+// (with freqStart, the Monday of a week they're serviced), 'monthly' (with
+// freqMonthWeek 1 to 4 or 'last': which of that weekday in the month) or
+// 'oncall' (never on the regular route; only a moved visit brings them).
+// Only the regular service list follows it: work orders, filter cleans and
+// tasks are their own items.
+const FREQ_LABELS = {'': 'Every week', every2: 'Every other week', every3: 'Every 3 weeks', every4: 'Every 4 weeks',
+  monthly: 'Once a month', oncall: 'On call'};
+function frequencySkips(c, iso){
+  const f = c && c.frequency;
+  if(!f || !iso) return false;
+  if(f === 'oncall') return true;
+  const n = {every2: 2, every3: 3, every4: 4}[f];
+  if(n){
+    if(!c.freqStart) return false;
+    const weeks = Math.round((new Date(owMonday(iso) + 'T12:00:00') - new Date(owMonday(c.freqStart) + 'T12:00:00')) / (7 * 86400000));
+    return ((weeks % n) + n) % n !== 0;
+  }
+  if(f === 'monthly'){
+    const d = new Date(iso + 'T12:00:00');
+    const date = d.getDate();
+    const want = c.freqMonthWeek || 1;
+    if(want === 'last') return date + 7 <= new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return Math.ceil(date / 7) !== Number(want);
+  }
+  return false;
+}
+// Off the regular service list that day: their own frequency, or their
+// technician's weeks off
+function skipsThisDay(c, iso){ return offWeekSkips(c, iso) || frequencySkips(c, iso); }
+
 function customerServicedOn(c, day){
   return !!c && !!day && (c.day === day || (Array.isArray(c.extraDays) && c.extraDays.indexOf(day) !== -1));
 }
 
+// Where a customer's jobs go on the route (Oct 14): just below their stop;
+// once that's done, just after the stop that came before them on the day (or
+// first if they were first); not on the route that day, at the bottom
+function routeJobAnchor(container, cid, dayAllIds, added){
+  const service = container.querySelector('[data-customer-row="' + cid + '"]');
+  if(service) return service;
+  const at = dayAllIds.indexOf(cid);
+  if(at === -1) return null;
+  let prev = null;
+  for(let i = at - 1; i >= 0 && !prev; i--) prev = container.querySelector('[data-customer-row="' + dayAllIds[i] + '"]');
+  if(prev){
+    let a = prev;
+    while(a.nextElementSibling && added.indexOf(a.nextElementSibling) === -1
+      && (a.nextElementSibling.classList.contains('route-job') || a.nextElementSibling.classList.contains('route-brief') || a.nextElementSibling.classList.contains('route-job-brief'))) a = a.nextElementSibling;
+    return a;
+  }
+  const first = container.firstElementChild;
+  if(first && added.indexOf(first) === -1) added.forEach(r => container.insertBefore(r, first));
+  return null;
+}
 function renderHomeList(...args){
   const box = document.getElementById('homeCustomerList');
   const open = box && box.querySelector('.route-brief');
@@ -11309,6 +11672,8 @@ function adminVersion_renderHomeList(){
   // Anyone finished on the day being viewed drops off — today, or any day before
   const baseCustomers = customers
     .filter(c => customerServicedOn(c, selectedHomeDay) && c.active !== false)
+    // Their technician's off week (Oct 9)
+    .filter(c => !skipsThisDay(c, selectedDayISO))
     .filter(c => !servicedOnDate(c, selectedDayISO))
     .filter(c => !movedAway.has(c.id))
     .filter(c => !adminViewTechId || c.technicianId === adminViewTechId);
@@ -11407,7 +11772,7 @@ function adminVersion_renderHomeList(){
     row.dataset.customerRow = c.id;
     row.style.flexWrap = 'nowrap';
     row.innerHTML = `<div style="display:flex;align-items:center;min-width:0;flex:1 1 auto;">
-        <div style="min-width:0;flex:1 1 auto;"><div class="cust-name">${c.name}${movedJustTodayTo(c, selectedDayISO) ? ' <span style="background:var(--gold);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle;margin-left:6px;">JUST TODAY</span>' : ''}</div><div class="cust-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.address || 'No address on file'}</div></div>
+        <div style="min-width:0;flex:1 1 auto;">${custNameLineHtml(c, movedJustTodayTo(c, selectedDayISO))}<div class="cust-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.address || 'No address on file'}</div></div>
       </div>`;
 
     if(canReorder){
@@ -11525,6 +11890,15 @@ function adminVersion_renderHomeList(){
         openDirections(c);
       });
       btnRow.appendChild(directionsBtn);
+      // Share their address or contact (Oct 12): admins only
+      if(isAdminUser()){
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'btn btn-ghost';
+        shareBtn.style.cssText = 'width:auto;padding:8px 12px;font-size:13px;';
+        shareBtn.textContent = 'Share';
+        shareBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openShareCustomer(c); });
+        btnRow.appendChild(shareBtn);
+      }
 
       const skipBtn2 = document.createElement('button');
       skipBtn2.className = 'btn btn-ghost';
@@ -11585,13 +11959,23 @@ function adminVersion_renderHomeList(){
   // By default a job sits just below its customer's service when they're on
   // the route that day, and at the bottom otherwise. Separate items either way:
   // submitting one never submits the other, and a dragged job keeps its place.
+  // Oct 14: once the customer's service is done their job stays where they
+  // were on the route, not dropped to the bottom
+  const dayAllIds = (()=>{
+    try{
+      const all = customers.filter(x => x && x.active !== false && customerServicedOn(x, selectedHomeDay)
+        && !skipsThisDay(x, selectedDayISO) && !movedAway.has(x.id) && (!adminViewTechId || x.technicianId === adminViewTechId));
+      const moved = customers.filter(x => x && movedHere.has(x.id) && x.active !== false
+        && (!adminViewTechId || movedHereFor(movedWho, x, adminViewTechId)) && !all.some(b => b.id === x.id));
+      return orderCustomersForDay(selectedHomeDay, all.concat(moved)).map(x => x.id);
+    }catch(e){ return []; }
+  })();
   jobsOnTheirOwn.forEach(c=>{
     const before = container.children.length;
     appendRouteJobRows(container, c, routeJobsFor(c.id, selectedDayISO, adminViewTechId), selectedDayISO, canReorder);
     const added = Array.from(container.children).slice(before);
-    const service = container.querySelector('[data-customer-row="' + c.id + '"]');
-    if(!service) return;
-    let anchor = service;
+    let anchor = routeJobAnchor(container, c.id, dayAllIds, added);
+    if(!anchor) return;
     added.forEach(r => { anchor.after(r); anchor = r; });
   });
   if(looseTasks.length) appendRouteJobRows(container, null, looseTasks, selectedDayISO, canReorder);
@@ -11612,6 +11996,8 @@ function techVersion_renderHomeList(){
     .filter(c => customerServicedOn(c, selectedHomeDay) && c.active !== false)
     // Only customers assigned to the signed-in technician appear on their route
     .filter(c => currentUser ? c.technicianId === currentUser.id : false)
+    // An off week: only the customers still serviced then (Oct 9)
+    .filter(c => !skipsThisDay(c, selectedDayISO))
     // Done on that day, or since: a Friday customer caught up on Monday drops
     // off Friday's route rather than sitting there for good
     .filter(c => !servicedForDay(c, selectedDayISO));
@@ -11735,7 +12121,7 @@ function techVersion_renderHomeList(){
     row.dataset.customerRow = c.id;
     row.style.flexWrap = 'nowrap';
     row.innerHTML = `<div style="display:flex;align-items:center;min-width:0;flex:1 1 auto;">
-        <div style="min-width:0;flex:1 1 auto;"><div class="cust-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}${filterCleanIds.has(c.id) ? ' <span style="background:var(--gold);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle;margin-left:6px;">FILTER CLEAN</span>' : ''}${movedJustTodayTo(c, selectedDayISO) ? ' <span style="background:var(--gold);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle;margin-left:6px;">JUST TODAY</span>' : ''}</div><div class="cust-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.address || 'No address on file'}</div></div>
+        <div style="min-width:0;flex:1 1 auto;">${custNameLineHtml(c, movedJustTodayTo(c, selectedDayISO))}<div class="cust-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.address || 'No address on file'}</div></div>
       </div>`;
 
     if(canReorder){
@@ -11924,13 +12310,24 @@ function techVersion_renderHomeList(){
   // By default a job sits just below its customer's service when they're on
   // the route that day, and at the bottom otherwise. Separate items either way:
   // submitting one never submits the other, and a dragged job keeps its place.
+  // Oct 14: once the customer's service is done their job stays where they
+  // were on the route, not dropped to the bottom: just after the stop that came
+  // before them (or first, if they were first)
+  const dayAllIds = (()=>{
+    try{
+      const mine = customers.filter(x => x && x.active !== false && customerServicedOn(x, selectedHomeDay)
+        && currentUser && x.technicianId === currentUser.id && !skipsThisDay(x, selectedDayISO) && !movedAway.has(x.id));
+      const movedIn = customers.filter(x => x && x.active !== false && currentUser
+        && movedHereFor(movedOntoDate(reschedules, selectedDayISO), x, currentUser.id) && !mine.some(m => m.id === x.id));
+      return orderCustomersForDay(selectedHomeDay, mine.concat(movedIn)).map(x => x.id);
+    }catch(e){ return []; }
+  })();
   jobsOnTheirOwn.forEach(c=>{
     const before = container.children.length;
     appendRouteJobRows(container, c, routeJobsFor(c.id, selectedDayISO, currentUser ? currentUser.id : '__none__'), selectedDayISO, canReorder);
     const added = Array.from(container.children).slice(before);
-    const service = container.querySelector('[data-customer-row="' + c.id + '"]');
-    if(!service) return;
-    let anchor = service;
+    let anchor = routeJobAnchor(container, c.id, dayAllIds, added);
+    if(!anchor) return;
     added.forEach(r => { anchor.after(r); anchor = r; });
   });
   if(looseTasks.length) appendRouteJobRows(container, null, looseTasks, selectedDayISO, canReorder);
@@ -12013,13 +12410,17 @@ function renderServicedList(){
     // logged before visit times were tracked has none, so it sits at the very
     // bottom rather than disappearing.
     .sort((a,b)=> (b.c.lastServicedAt || '').localeCompare(a.c.lastServicedAt || '') || String(b.day || '').localeCompare(String(a.day || '')));
-  if(servicedCustomers.length === 0){
+  // Work orders, filter cleans, pool drains and tasks finished that day, for an
+  // admin (Oct 10): they leave Today once done and are found here instead
+  const finishedJobs = isAdminUser() ? servicedJobsOn(today, me) : [];
+  if(servicedCustomers.length === 0 && finishedJobs.length === 0){
     container.innerHTML = '<div class="empty">'
       + (servicedDayOffset === 0 ? 'No one\'s been serviced yet today.' : 'Nobody was serviced that day.')
       + '</div>';
     return;
   }
   container.innerHTML = '';
+  finishedJobs.forEach(job => container.appendChild(servicedJobRow(job)));
   const showsDay = servicedCustomers.some(x => x.day);
   servicedCustomers.forEach(entry=>{
     const c = entry.c;
@@ -12043,6 +12444,7 @@ function renderServicedList(){
       reserviceCustomer(c, entry.day);
     });
     row.appendChild(reserviceBtn);
+    row.dataset.doneAt = c.lastServicedAt || '';
 
     // Tapping the row pulls up today's report for that customer.
     // Guarded so a leftover click from a previous screen can't trigger it.
@@ -12084,6 +12486,78 @@ function renderServicedList(){
 
     container.appendChild(row);
   });
+  // Jobs and services together, the most recent at the top
+  if(finishedJobs.length){
+    Array.from(container.children)
+      .sort((a, b) => String(b.dataset.doneAt || '').localeCompare(String(a.dataset.doneAt || '')))
+      .forEach(el => container.appendChild(el));
+  }
+}
+
+// Finished jobs on a day (by when they were done), for one technician or everyone
+function servicedJobsOn(iso, techId){
+  const localDay = t => { const d = new Date(t); return isNaN(d) ? '' : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const whose = x => !techId || String(x.doneBy || x.technicianId || '') === String(techId)
+    || (!x.doneBy && Array.isArray(x.technicianIds) && x.technicianIds.map(String).indexOf(String(techId)) !== -1);
+  const out = [];
+  [['scheduledWorkOrders', 'work order', 'wo:'], ['scheduledFilterCleans', 'filter clean', 'fc:'], ['scheduledPoolDrains', 'pool drain', 'pd:']]
+    .forEach(([key, kind, pre])=>{
+      (lsGet(key) || []).forEach(j=>{
+        if(!j || j.status !== 'done' || !j.doneAt || localDay(j.doneAt) !== iso || !whose(j)) return;
+        out.push({kind, id: j.id, report: pre + j.id, customerId: j.customerId, doneAt: j.doneAt, durationMs: j.doneDurationMs,
+          title: kind === 'work order' ? (j.title || 'Work order') : kind === 'pool drain' ? drainTitle(j) : jobKindLabel(kind)});
+      });
+    });
+  (lsGet('tasks') || []).forEach(t=>{
+    if(!t || !t.done || !t.doneAt || localDay(t.doneAt) !== iso || !whose(t)) return;
+    const ids = (t.customerIds || []).length ? t.customerIds : (t.customerId ? [t.customerId] : ['']);
+    ids.forEach(cid => out.push({kind: 'task', id: t.id, report: cid ? 'tk:' + t.id : '', customerId: cid, doneAt: t.doneAt, durationMs: t.doneDurationMs, title: t.title || 'Task'}));
+  });
+  return out;
+}
+// A finished job's row on Serviced: its colour and icon, when it was done;
+// pressing it opens its report
+function servicedJobRow(job){
+  const customer = job.customerId ? customers.find(c => String(c.id) === String(job.customerId)) : null;
+  const row = document.createElement('div');
+  row.className = 'cust-row';
+  row.dataset.doneAt = job.doneAt || '';
+  row.style.background = jobKindColours(job.kind)[0];
+  const left = document.createElement('div');
+  left.style.cssText = 'min-width:0;';
+  const name = document.createElement('div');
+  name.className = 'cust-name';
+  name.style.cssText = 'color:' + jobKindColours(job.kind)[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  setJobNameLine(name, job.kind, (customer ? customer.name + ' \u2013 ' : '') + job.title);
+  const meta = document.createElement('div');
+  meta.className = 'cust-meta';
+  meta.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  let when = '';
+  try{ when = new Date(job.doneAt).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'}); }catch(e){}
+  meta.textContent = 'Done ' + when + (job.durationMs ? ' \u00b7 ' + formatDuration(job.durationMs) : '') + (customer && customer.address ? ' \u00b7 ' + customer.address : '');
+  left.appendChild(name); left.appendChild(meta);
+  row.appendChild(left);
+  if(customer && job.report){
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', async ()=>{
+      if(viewJustChanged()) return;
+      reportOpenedFrom = null;
+      const sel = document.getElementById('reportCustomerSelect');
+      if(sel){ populateCustomerSelect(sel, 'Add a customer first'); sel.value = customer.id; }
+      if(typeof syncReportCustomerSearchField === 'function') syncReportCustomerSearchField();
+      await refreshDateSelector(customer.id);
+      const dateSel = document.getElementById('reportReadingSelect');
+      if(dateSel && Array.from(dateSel.options).some(o => o.value === job.report)){
+        dateSel.value = job.report;
+        await renderDateReport(customer.id, job.report);
+      }
+      const btnReports = document.getElementById('btnReportModeReports');
+      if(btnReports && isAdminUser()) btnReports.click();
+      if(currentViewName !== 'report') switchView('report', {skipRefresh: true});
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+  }
+  return row;
 }
 
 // An admin's Serviced: whose services to show (everyone, or one technician;
@@ -12112,10 +12586,57 @@ document.getElementById('servicedTechSel').addEventListener('change', (e)=>{
   renderServicedList();
 });
 
+// Admins choose whose Today list a reserviced customer goes on (Oct 13).
+// Resolves with that technician's id, or null if the window is cancelled.
+function pickReserviceTech(customer){
+  return new Promise(resolve=>{
+    let who = null; try{ who = currentUser; }catch(e){}
+    const techs = techniciansInOrder().filter(t => t && t.id);
+    if(who && who.id && !techs.some(t => String(t.id) === String(who.id))) techs.unshift({id: who.id, name: who.name || 'Me'});
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    const box = document.createElement('div');
+    box.className = 'confirm-box';
+    box.style.maxWidth = '420px';
+    box.innerHTML = '<h3 style="font-size:16px;margin:0 0 4px;"></h3>'
+      + '<p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">Their report stays as it is. Whose Today list should they go on, just for today?</p>'
+      + '<div class="field"><label>Technician</label><select></select></div>'
+      + '<div class="btn-row" style="margin-top:6px;"><button type="button" class="btn btn-ghost" data-no>Cancel</button><button type="button" class="btn btn-primary" data-go>Reservice</button></div>';
+    box.querySelector('h3').textContent = 'Reservice ' + (customer.name || '');
+    const sel = box.querySelector('select');
+    techs.forEach(t=>{
+      const o = document.createElement('option');
+      o.value = String(t.id);
+      // Just "(assigned)" on their own technician; no "(me)" (Tyrus, Oct 14)
+      o.textContent = (t.name || 'Technician')
+        + (String(t.id) === String(customer.technicianId || '') ? ' (assigned)' : '');
+      sel.appendChild(o);
+    });
+    // Starts on whoever pressed it, as Reservice always did
+    if(who && who.id) sel.value = String(who.id);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    let done = false;
+    const finish = v => { if(done) return; done = true; overlay.remove(); resolve(v); };
+    box.querySelector('[data-no]').addEventListener('click', ()=> finish(null));
+    box.querySelector('[data-go]').addEventListener('click', ()=> finish(sel.value || null));
+    // Closed some other way (a tap outside): nothing happens
+    new MutationObserver((m, obs)=>{ if(!overlay.isConnected){ obs.disconnect(); finish(null); } })
+      .observe(document.body, {childList: true});
+  });
+}
+
 async function reserviceCustomer(customer, forDay){
   // The customer as they are in the list right now, not the copy the row was
   // drawn with (a sync in between replaces every customer with a fresh copy)
   customer = customers.find(x => x && x.id === customer.id) || customer;
+  // An admin picks whose Today it goes on first; cancelling changes nothing
+  let toTech = null;
+  if(isAdminUser()){
+    toTech = await pickReserviceTech(customer);
+    if(!toTech) return;
+    customer = customers.find(x => x && x.id === customer.id) || customer;
+  }
   // The original report stays exactly as it was. This flag marks the NEXT
   // report as a redo so the two can be told apart.
   customer.pendingRedo = true;
@@ -12152,13 +12673,16 @@ async function reserviceCustomer(customer, forDay){
   // Always a "just today" move to the admin who pressed it, whoever's
   // customer it is (their own included), replacing any move touching today,
   // and marked as a reservice so it shows JUST TODAY even on their own customer
-  if(isAdminUser() && who && who.id){
-    saveMoveJustOnce(customer.id, today, today, String(who.id));
+  if(isAdminUser() && (toTech || (who && who.id))){
+    const target = String(toTech || who.id);
+    saveMoveJustOnce(customer.id, today, today, target);
     const moves = loadReschedules();
     moves.forEach(r => { if(r && r.customerId === customer.id && r.toDate === today
-      && String(r.technicianId || '') === String(who.id)) r.reservice = true; });
+      && String(r.technicianId || '') === target) r.reservice = true; });
     lsSet('rescheduledVisits', moves);
-    showToast(customer.name + ' moved to your Today list');
+    const t = techniciansInOrder().find(x => x && String(x.id) === target);
+    showToast(customer.name + (who && String(who.id) === target ? ' moved to your Today list'
+      : ' moved to ' + ((t && t.name) || 'their') + '\u2019s Today list'));
   } else {
     showToast(customer.name + ' moved back to Today\'s list');
   }
@@ -12355,6 +12879,7 @@ function routeOrderToday(){
   const base = customers
     .filter(c => customerServicedOn(c, selectedHomeDay) && c.active !== false)
     .filter(c => !viewing || c.technicianId === viewing)
+    .filter(c => !skipsThisDay(c, iso))
     .filter(c => !movedAway.has(c.id));
 
   const movedWho = movedOntoDate(reschedules, iso);
@@ -12691,6 +13216,127 @@ async function renderCustomerList(){
 
 let editingCustomerId = null;
 
+// ---------- Share a customer's address or contact (Oct 12, admins only) ----------
+// Tick what to send, then the phone's own share list (Messages, Gmail,
+// WhatsApp...) or Copy. Gate codes go only when ticked.
+function shareCustomerAddress(c){
+  const line2 = [c.city, [c.state, c.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  return [c.address, line2].filter(Boolean).join(', ');
+}
+function shareCustomerText(c, pick){
+  const lines = [String(c.name || '')];
+  const addr = shareCustomerAddress(c);
+  if(pick.address && addr){
+    lines.push(addr);
+    lines.push('https://maps.google.com/?q=' + encodeURIComponent(addr));
+  }
+  if(pick.phone && c.phone) lines.push('Phone: ' + c.phone);
+  if(pick.email && c.email) lines.push('Email: ' + c.email);
+  if(pick.gates){
+    if(c.neighborhoodGateCode) lines.push('Neighborhood gate: ' + c.neighborhoodGateCode);
+    if(c.gateCode) lines.push('Yard gate: ' + c.gateCode);
+  }
+  return lines.join('\n');
+}
+function shareCustomerVcard(c, pick){
+  const esc = v => String(v || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, m => '\\' + m);
+  const out = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + esc(c.name)];
+  if(pick.phone && c.phone) out.push('TEL;TYPE=CELL:' + esc(c.phone));
+  if(pick.email && c.email) out.push('EMAIL:' + esc(c.email));
+  if(pick.address && c.address) out.push('ADR;TYPE=HOME:;;' + esc(c.address) + ';' + esc(c.city) + ';' + esc(c.state) + ';' + esc(c.zip) + ';');
+  out.push('END:VCARD');
+  return out.join('\r\n');
+}
+function openShareCustomer(c){
+  if(!c || !isAdminUser()) return;
+  const name = String(c.name || '');
+  const addr = shareCustomerAddress(c);
+  const gates = [c.neighborhoodGateCode ? 'Neighborhood gate ' + c.neighborhoodGateCode : '', c.gateCode ? 'Yard gate ' + c.gateCode : ''].filter(Boolean).join(' \u00b7 ');
+  const items = [
+    ['address', 'Address', addr ? addr + ' \u00b7 with a map link' : '', !!addr],
+    ['phone', 'Phone', c.phone || '', !!c.phone],
+    ['email', 'Email', c.email || '', false],
+    ['gates', 'Gate codes', gates ? gates + ' \u00b7 off unless ticked' : '', false],
+    ['card', 'Save as a contact', 'Adds a contact card they can tap to save', false]
+  ].filter(it => it[0] === 'card' || it[2]);
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.style.alignItems = 'flex-end';
+  const box = document.createElement('div');
+  box.className = 'confirm-box';
+  box.style.cssText = 'max-width:520px;width:100%;border-radius:18px 18px 0 0;';
+  box.innerHTML = '<h3 style="font-size:17px;margin:0 0 4px;"></h3><p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Tick what to send, then pick how to send it.</p>';
+  box.querySelector('h3').textContent = 'Share ' + name;
+  const boxes = {};
+  items.forEach(([key, label, detail, on])=>{
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14.5px;font-weight:600;cursor:pointer;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = on; cb.style.cssText = 'width:auto;margin:3px 0 0;';
+    boxes[key] = cb;
+    row.appendChild(cb);
+    const txt = document.createElement('span');
+    txt.textContent = label;
+    const sm = document.createElement('small');
+    sm.style.cssText = 'display:block;font-weight:400;font-size:12.5px;color:var(--muted);';
+    sm.textContent = detail;
+    txt.appendChild(sm);
+    row.appendChild(txt);
+    box.appendChild(row);
+  });
+  if(!addr && !c.phone && !c.email){
+    box.insertAdjacentHTML('beforeend', '<p style="font-size:13px;color:var(--rust);margin:10px 0 0;">There\u2019s no address, phone or email on file to share yet.</p>');
+  }
+  const btns = document.createElement('div');
+  btns.className = 'btn-row';
+  btns.style.cssText = 'margin-top:14px;gap:8px;';
+  const mk = (t, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ' + cls; b.textContent = t; btns.appendChild(b); return b; };
+  const share = mk('Share\u2026', 'btn-primary'), copy = mk('Copy', 'btn-ghost'), cancel = mk('Cancel', 'btn-ghost');
+  share.style.flex = '1'; copy.style.width = 'auto'; cancel.style.width = 'auto';
+  box.appendChild(btns);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  const picked = ()=>{
+    const p = {}; Object.keys(boxes).forEach(k => p[k] = boxes[k].checked);
+    return p;
+  };
+  const nothing = p => !(p.address || p.phone || p.email || p.gates || p.card);
+  cancel.addEventListener('click', close);
+  copy.addEventListener('click', async ()=>{
+    const p = picked();
+    if(nothing(p)){ showToast('Tick something to send first'); return; }
+    const text = shareCustomerText(c, p);
+    try{ await navigator.clipboard.writeText(text); showToast('Copied'); close(); }
+    catch(e){ showToast('Couldn\u2019t copy on this phone'); }
+  });
+  share.addEventListener('click', async ()=>{
+    const p = picked();
+    if(nothing(p)){ showToast('Tick something to send first'); return; }
+    const text = shareCustomerText(c, p);
+    const data = {title: name, text: text};
+    if(p.card){
+      try{
+        const file = new File([shareCustomerVcard(c, p)], (String(c.name || 'contact').replace(/[^\w ]+/g, '').trim() || 'contact') + '.vcf', {type: 'text/vcard'});
+        if(navigator.canShare && navigator.canShare({files: [file]})) data.files = [file];
+      }catch(e){}
+    }
+    if(navigator.share){
+      try{ await navigator.share(data); close(); }
+      catch(e){ if(e && e.name === 'AbortError') return; showToast('Couldn\u2019t open sharing \u2014 try Copy'); }
+      return;
+    }
+    // No share list (a computer): copy instead
+    try{ await navigator.clipboard.writeText(text); showToast('Sharing isn\u2019t available here \u2014 copied instead'); close(); }
+    catch(e){ showToast('Sharing isn\u2019t available here'); }
+  });
+}
+document.getElementById('ncShareBtn').addEventListener('click', ()=>{
+  const c = customers.find(x => x && x.id === editingCustomerId);
+  if(c) openShareCustomer(c);
+});
+
+
 function openCustomerEditor(customer){
   editingCustomerId = customer.id;
   document.getElementById('ncName').value = customer.name || '';
@@ -12721,6 +13367,7 @@ function openCustomerEditor(customer){
   ncDogs = (customer.dogs || []).map(d => ({...d}));
   renderNcDogFields();
   document.getElementById('newCustomerHeading').textContent = 'Edit customer';
+  { const sb = document.getElementById('ncShareBtn'); if(sb) sb.style.display = isAdminUser() ? '' : 'none'; }
   document.getElementById('btnSaveCustomer').textContent = 'Save changes';
   switchView('customers');
   showCustomerForm();
@@ -12844,6 +13491,11 @@ async function getCustomerServiceDates(customerId){
     out.push({dateStr: 'fc:' + f.id, ts: f.doneAt || (f.date + 'T12:00:00'), isRedo: false,
               day: f.doneAt ? localDateOfStamp(f.doneAt) : f.date, fc: f});
   });
+  // Pool drains (Oct 10)
+  poolDrainVisitsFor(customerId).forEach(f=>{
+    out.push({dateStr: 'pd:' + f.id, ts: f.doneAt || (f.date + 'T12:00:00'), isRedo: false,
+              day: f.doneAt ? localDateOfStamp(f.doneAt) : f.date, pd: f});
+  });
   // Finished tasks for this customer (Oct 3)
   finishedTasksFor(customerId).forEach(t=>{
     out.push({dateStr: 'tk:' + t.id, ts: t.doneAt || ((t.date || '') + 'T12:00:00'), isRedo: false,
@@ -12884,6 +13536,7 @@ async function renderTaskReport(customerId, taskId){
     + (t.date ? '<div class="rdate">Scheduled for ' + esc(fmtDate(t.date + 'T12:00:00'))
         + (t.doneAt ? ' \u00b7 Completed ' + esc(fmtDateTime(t.doneAt)) : '') + '</div>' : '')
     + (t.doneBy ? '<div class="rdate">Completed by ' + esc(by) + '</div>' : '')
+    + (t.doneDurationMs ? '<div class="rdate">Time on the job ' + esc(formatDuration(t.doneDurationMs)) + '</div>' : '')
     + '</div><div class="report-badge">Completed</div></div>'
     + sec('Task') + '<div class="report-notes" style="white-space:pre-wrap;">' + esc(t.title || 'Task') + '</div>'
     + (t.details ? sec('Details') + '<div class="report-notes" style="white-space:pre-wrap;">' + esc(t.details) + '</div>' : '')
@@ -12894,6 +13547,11 @@ async function renderTaskReport(customerId, taskId){
 // Filter cleans submitted on the job screen (Oct 3), shown the same way
 function filterCleanVisitsFor(customerId){
   return (lsGet('scheduledFilterCleans') || [])
+    .filter(s => s && s.status === 'done' && String(s.customerId) === String(customerId));
+}
+// Pool drains submitted on the job screen (Oct 10), shown the same way
+function poolDrainVisitsFor(customerId){
+  return (lsGet('scheduledPoolDrains') || [])
     .filter(s => s && s.status === 'done' && String(s.customerId) === String(customerId));
 }
 function workOrderNumberText(n){ return n ? '#' + String(n).padStart(4, '0') : ''; }
@@ -12921,14 +13579,17 @@ async function workOrderVideoSource(ref){
 }
 
 async function renderWorkOrderReport(customerId, jobId, isClean){
+  // isClean: true for a filter clean, 'drain' for a pool drain (Oct 10)
+  const isDrain = isClean === 'drain';
+  const jobWord = isDrain ? 'pool drain' : isClean ? 'filter clean' : 'work order';
   const out = document.getElementById('reportOutput');
   document.getElementById('reportActions').style.display = 'none';
   document.getElementById('btnDownloadPhoto').style.display = 'none';
   document.getElementById('btnSharePhoto').style.display = 'none';
   const customer = customers.find(c => c.id === customerId);
-  const j = (isClean ? filterCleanVisitsFor(customerId) : workOrderVisitsFor(customerId)).find(x => String(x.id) === String(jobId));
+  const j = (isDrain ? poolDrainVisitsFor(customerId) : isClean ? filterCleanVisitsFor(customerId) : workOrderVisitsFor(customerId)).find(x => String(x.id) === String(jobId));
   if(!customer || !j){
-    out.innerHTML = '<div class="empty">This ' + (isClean ? 'filter clean' : 'work order') + ' is no longer here.</div>';
+    out.innerHTML = '<div class="empty">This ' + jobWord + ' is no longer here.</div>';
     return;
   }
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -12952,11 +13613,12 @@ async function renderWorkOrderReport(customerId, jobId, isClean){
   }
   out.innerHTML = '<div class="report-doc">'
     + '<div class="report-head"><div>'
-    + '<h2>' + (isClean ? 'Filter clean' : 'Work order ' + esc(num)) + '</h2>'
+    + '<h2>' + (isDrain ? drainTitle(j) : isClean ? 'Filter clean' : 'Work order ' + esc(num)) + '</h2>'
     + '<div class="rdate">' + esc(customer.name) + (customer.address ? ' \u2014 ' + esc(customer.address) : '') + '</div>'
     + '<div class="rdate">Scheduled for ' + esc(fmtDate(j.date + 'T12:00:00'))
     + (j.doneAt ? ' \u00b7 Submitted ' + esc(fmtDateTime(j.doneAt)) : '') + '</div>'
     + '<div class="rdate">Submitted by ' + esc(by) + '</div>'
+    + (j.doneDurationMs ? '<div class="rdate">Time on the job ' + esc(formatDuration(j.doneDurationMs)) + '</div>' : '')
     + '</div><div class="report-badge">Completed</div></div>'
     + (items.length ? sec('Line items') + '<table class="report-table">' + rows + '</table>' : '')
     + (j.notes ? sec('Work order notes') + '<div class="report-notes" style="white-space:pre-wrap;">' + esc(j.notes) + '</div>' : '')
@@ -13015,22 +13677,22 @@ async function renderWorkOrderReport(customerId, jobId, isClean){
     del.type = 'button';
     del.className = 'btn btn-ghost';
     del.style.cssText = 'width:auto;color:var(--rust);border-color:#EFC9BC;';
-    del.textContent = isClean ? 'Delete this filter clean' : 'Delete this work order';
+    del.textContent = isClean ? 'Delete this ' + jobWord : 'Delete this work order';
     del.addEventListener('click', async ()=>{
-      const ok = await confirmDialog('Delete ' + (isClean ? 'this filter clean' : 'work order ' + num) + ' from ' + fmtDate(j.date + 'T12:00:00') + '?\n\n'
+      const ok = await confirmDialog('Delete ' + (isClean ? 'this ' + jobWord : 'work order ' + num) + ' from ' + fmtDate(j.date + 'T12:00:00') + '?\n\n'
         + 'It is removed for good from Service reports' + (isClean ? '' : ' and WorkCenter History') + ', on every device, and cannot be brought back.',
         'Delete for good');
       if(!ok) return;
-      const listKey = isClean ? 'scheduledFilterCleans' : 'scheduledWorkOrders';
+      const listKey = isDrain ? 'scheduledPoolDrains' : isClean ? 'scheduledFilterCleans' : 'scheduledWorkOrders';
       const jobs = lsGet(listKey) || [];
-      if(jobs.some(x => x && String(x.id) === String(j.id))) queueOfficeWork(isClean ? 'filter_clean' : 'work_order', j.id, true);
+      if(jobs.some(x => x && String(x.id) === String(j.id))) queueOfficeWork(isDrain ? 'pool_drain' : isClean ? 'filter_clean' : 'work_order', j.id, true);
       lsSet(listKey, jobs.filter(x => !(x && String(x.id) === String(j.id))));
-      lsSet('jobSubmissions', (lsGet('jobSubmissions') || []).filter(x => !(x && x.kind === (isClean ? 'filter clean' : 'work order')
+      lsSet('jobSubmissions', (lsGet('jobSubmissions') || []).filter(x => !(x && x.kind === jobWord
         && String(x.sourceId) === String(j.id))));
       fieldNoteLocalChange();
       try{ if(typeof awcRenderHistory === 'function' && document.getElementById('awcHistList')) awcRenderHistory(); }catch(e){}
       await refreshDateSelector(customerId);
-      showToast(isClean ? 'Filter clean deleted' : 'Work order deleted');
+      showToast(isDrain ? 'Pool drain deleted' : isClean ? 'Filter clean deleted' : 'Work order deleted');
     });
     footer.appendChild(del);
     doc.appendChild(footer);
@@ -13046,6 +13708,7 @@ async function renderDateReport(customerId, dateStr){
   // A work order (Oct 3)
   if(dateStr.indexOf('wo:') === 0){ await renderWorkOrderReport(customerId, dateStr.slice(3)); return; }
   if(dateStr.indexOf('fc:') === 0){ await renderWorkOrderReport(customerId, dateStr.slice(3), true); return; }
+  if(dateStr.indexOf('pd:') === 0){ await renderWorkOrderReport(customerId, dateStr.slice(3), 'drain'); return; }
   if(dateStr.indexOf('tk:') === 0){ await renderTaskReport(customerId, dateStr.slice(3)); return; }
   const wantRedo = dateStr.indexOf('|redo') !== -1;
   const plainDate = dateStr.replace('|redo', '');
@@ -13115,6 +13778,7 @@ async function refreshDateSelector(customerId){
     opt.textContent = d.wo
       ? fmtDate(d.ts) + '  \u2014 Work order ' + workOrderNumberText(d.wo.workOrderNumber)
       : d.fc ? fmtDate(d.ts) + '  \u2014 Filter clean'
+      : d.pd ? fmtDate(d.ts) + '  \u2014 ' + drainTitle(d.pd)
       : d.task ? fmtDate(d.ts) + '  \u2014 Task'
       : fmtDate(d.ts) + (d.isRedo ? '  \u2014 redone' : '');
     sel.appendChild(opt);
@@ -13183,10 +13847,10 @@ function drawReportRows(){
   // Only the kind chosen beside the date bar (Oct 3)
   const kindSel = document.getElementById('reportKindFilter');
   const kind = kindSel ? kindSel.value : '';
-  const kindOf = d => d.wo ? 'wo' : d.fc ? 'fc' : d.task ? 'task' : 'report';
+  const kindOf = d => d.wo ? 'wo' : d.fc ? 'fc' : d.pd ? 'pd' : d.task ? 'task' : 'report';
   const shownList = kind ? reportRowsList.filter(d => kindOf(d) === kind) : reportRowsList;
   if(!shownList.length){
-    const name = {report: 'reports', wo: 'work orders', fc: 'filter cleans', task: 'tasks'}[kind] || 'reports';
+    const name = {report: 'reports', wo: 'work orders', fc: 'filter cleans', pd: 'pool drains', task: 'tasks'}[kind] || 'reports';
     box.innerHTML = '<div class="empty" style="margin-top:8px;">No ' + name + ' yet.</div>';
     return;
   }
@@ -13205,12 +13869,12 @@ function drawReportRows(){
     dateCell.textContent = fmtDate(d.ts);
     when.appendChild(dateCell);
     const tag = document.createElement('span');
-    const tc = d.wo ? jobKindColours('work order') : d.fc ? jobKindColours('filter clean') : d.task ? jobKindColours('task')
+    const tc = d.wo ? jobKindColours('work order') : d.fc ? jobKindColours('filter clean') : d.pd ? jobKindColours('pool drain') : d.task ? jobKindColours('task')
       : ['var(--teal-pale)', 'var(--teal-deep)'];
     tag.style.cssText = "margin-left:0;vertical-align:middle;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;"
       + 'letter-spacing:0.07em;text-transform:uppercase;padding:3px 6px;border-radius:6px;'
-      + 'color:' + tc[1] + ';background:' + (isOpen && !d.wo && !d.fc && !d.task ? 'var(--card)' : tc[0]) + ';';
-    tag.textContent = d.wo ? 'Work order ' + workOrderNumberText(d.wo.workOrderNumber) : d.fc ? 'Filter clean' : d.task ? 'Task' : 'Service report';
+      + 'color:' + tc[1] + ';background:' + (isOpen && !d.wo && !d.fc && !d.pd && !d.task ? 'var(--card)' : tc[0]) + ';';
+    tag.textContent = d.wo ? 'Work order ' + workOrderNumberText(d.wo.workOrderNumber) : d.fc ? 'Filter clean' : d.pd ? drainTitle(d.pd) : d.task ? 'Task' : 'Service report';
     when.appendChild(tag);
     const extra = d.wo ? (d.wo.title || '') : d.task ? (d.task.title || '') : (d.isRedo ? 'Redone' : '');
     if(extra){
@@ -14524,7 +15188,7 @@ function syncStepChrome(){
       if(!ok) return;
     }
     await discardVisitInProgress();
-    visitDraft = {customerId: null, values: {}, section: null, step: 1};
+    visitDraft = {customerId: null, values: {}, section: null, step: 1}; forgetVisitInProgress();
   visitLeftOpenFor = null;
     switchView('home');
   });
@@ -15152,11 +15816,14 @@ function appWorkOrderDates(startISO, repeat, customEvery, customUnit){
   document.head.appendChild(st);
 })();
 
-var awcKind = 'Work Order';      // or 'Task'
+var awcKind = 'Quote';           // or 'Work Order' or 'Task'; opens on Quote (Oct 15)
 var awcView = 'main';            // main | current | history
 var awcWoCustomers = [];         // customer ids on the work order
 var awcTaskCustomers = [];       // customer ids on the task (optional)
 var awcLineItems = [{description: '', qty: '', price: ''}];
+var awcPickFilterCleans = function(){};
+var awcQuoteCustomers = [];      // customer ids on the quote (Oct 15)
+var awcQuoteLines = [{description: '', qty: '', price: ''}];
 var awcWoTechs = [];             // technician ids ticked
 var awcTaskTechs = [];
 var awcShown = 20;               // rows shown on Current / History before "Show more"
@@ -15225,27 +15892,86 @@ function awcBuild(pane){
   pane.innerHTML = `
   <div class="card" id="awc">
     <div class="btn-row" id="awcKindRow" style="gap:6px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line);flex-wrap:nowrap;">
+      <!-- Quote (Oct 15), as on the website: to the left of Work Order -->
+      <button type="button" class="btn" data-kind="Quote" style="flex:1;padding:10px 6px;">Quote</button>
       <button type="button" class="btn" data-kind="Work Order" style="flex:1;padding:10px 6px;">Work Order</button>
       <button type="button" class="btn" data-kind="Task" style="flex:1;padding:10px 6px;">Task</button>
     </div>
-    <div class="seg-control" id="awcViewRow">
-      <button type="button" class="history-type-btn active" data-view="main" id="awcMainTab">Work Order</button>
-      <button type="button" class="history-type-btn" data-view="current">Current</button>
+    <!-- The same two buttons as every other sub-tab row (Oct 8): the chosen one solid -->
+    <div class="btn-row" id="awcViewRow" style="gap:6px;margin-bottom:16px;flex-wrap:nowrap;">
+      <button type="button" class="btn btn-primary" data-view="main" id="awcMainTab" style="flex:1;padding:10px 6px;">Work Order</button>
+      <button type="button" class="btn btn-ghost" data-view="current" style="flex:1;padding:10px 6px;">Current</button>
       <!-- History is hidden for now (Oct 3); its code stays, to bring back -->
-      <button type="button" class="history-type-btn" data-view="history" style="display:none;">History</button>
+      <button type="button" class="btn btn-ghost" data-view="history" style="display:none;flex:1;padding:10px 6px;">History</button>
+    </div>
+
+    <!-- A quote (Oct 15): the website's quote, laid out like the work order
+         form. Emailed with Approve / Decline / Download, and kept on the server
+         so the website's Quotes, Alerts and the customer's Quotes & Orders have it -->
+    <div id="awcQuoteForm" style="display:none;">
+      <h2>New quote</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Emailed to the customer to approve or decline.</p>
+      <div class="field">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+          <label style="margin:0;">Date</label>
+          <span class="awc-num" id="awcQuoteNumber"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+          <input type="date" id="awcQuoteDate" style="width:auto;">
+          <label class="inline-check">Expires in
+            <input type="number" id="awcQuoteExpires" min="1" max="365" step="1" value="30" inputmode="numeric" style="width:64px;text-align:center;padding-left:6px;padding-right:6px;">
+            days</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Quote name</label>
+        <input id="awcQuoteName" placeholder="e.g. Heater replacement" autocomplete="off">
+      </div>
+      <div class="field" style="position:relative;">
+        <label>Customer</label>
+        <div id="awcQuoteChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+        <input id="awcQuoteSearch" placeholder="Start typing a name&hellip;" autocomplete="off">
+        <div class="awc-suggest" id="awcQuoteSuggest"></div>
+      </div>
+      <div class="field">
+        <label>Line items</label>
+        <div id="awcQuoteLines"></div>
+        <div class="btn-row" style="gap:8px;margin-top:4px;">
+          <button type="button" class="btn btn-ghost" id="awcQuoteAddLine" style="width:auto;">+ Add line item</button>
+          <button type="button" class="btn btn-ghost" id="awcQuoteAddFilterClean" style="width:auto;">+ Filter clean</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Notes (optional)</label>
+        <textarea id="awcQuoteNotes" placeholder="Any additional details for the customer..."></textarea>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 14px;">
+        <span style="font-size:13px;font-weight:600;color:var(--muted);">Total</span>
+        <span id="awcQuoteTotal" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--teal-deep);">$0.00</span>
+      </div>
+      <button type="button" class="btn btn-primary" id="awcQuoteSend" style="margin-bottom:8px;">Send to customer</button>
+      <div class="btn-row" style="flex-wrap:nowrap;">
+        <button type="button" class="btn btn-ghost" id="awcQuoteCustomize" style="flex:1 1 0;min-width:0;">Customize email</button>
+        <button type="button" class="btn btn-ghost" id="awcQuoteClear" style="flex:1 1 0;min-width:0;">Clear</button>
+      </div>
     </div>
 
     <div id="awcWoForm">
+      <h2>New work order</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Goes onto the technician&rsquo;s route on the scheduled date.</p>
       <div class="field">
         <!-- The number on the Scheduled date line (Oct 2) -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
           <label style="margin:0;">Scheduled date</label>
           <span class="awc-num" id="awcWoNumber"></span>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
           <input type="date" id="awcWoDate" style="width:auto;">
-          <label class="inline-check"><input type="checkbox" id="awcWoPhoto" checked> Photo required</label>
-          <label class="inline-check"><input type="checkbox" id="awcWoVideo"> Video required</label>
+          <!-- Photo and Video required stacked in one column beside the date (Oct 15) -->
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label class="inline-check"><input type="checkbox" id="awcWoPhoto" checked> Photo required</label>
+            <label class="inline-check"><input type="checkbox" id="awcWoVideo"> Video required</label>
+          </div>
         </div>
       </div>
       <div class="field" style="position:relative;">
@@ -15305,12 +16031,16 @@ function awcBuild(pane){
     </div>
 
     <div id="awcTaskForm" style="display:none;">
+      <h2>New task</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">A job for a technician &mdash; for a customer, or on its own.</p>
       <div class="field">
         <label>Scheduled date</label>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
           <input type="date" id="awcTaskDate" style="width:auto;">
-          <label class="inline-check"><input type="checkbox" id="awcTaskPhoto"> Photo required</label>
-          <label class="inline-check"><input type="checkbox" id="awcTaskVideo"> Video required</label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label class="inline-check"><input type="checkbox" id="awcTaskPhoto"> Photo required</label>
+            <label class="inline-check"><input type="checkbox" id="awcTaskVideo"> Video required</label>
+          </div>
         </div>
       </div>
       <button type="button" class="btn btn-primary" id="awcSavedTasks" style="width:100%;margin-bottom:12px;">Saved tasks</button>
@@ -15364,6 +16094,8 @@ function awcBuild(pane){
     </div>
 
     <div id="awcCurrent" style="display:none;">
+      <h2>Current</h2>
+      <p id="awcCurSub" style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Work orders and tasks still to be done.</p>
       <select id="awcCurTech" style="margin-bottom:8px;"></select>
       <div id="awcCurList"></div>
     </div>
@@ -15403,9 +16135,10 @@ function awcBuild(pane){
     });
     awcRenderLines();
   };
-  if(fcBtn) fcBtn.addEventListener('click', ()=>{
+  // The same window for the quote's + Filter clean (Oct 15)
+  awcPickFilterCleans = addLines=>{
     const list = (lsGet('productsServices') || []).filter(x => x && /filter\s*clean/i.test(String(x.name || '')));
-    if(list.length <= 1){ addFcLines([{product: list[0] || null, count: 1}]); return; }
+    if(list.length <= 1){ addLines([{product: list[0] || null, count: 1}]); return; }
     const counts = list.map(()=> 0);
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
@@ -15452,11 +16185,13 @@ function awcBuild(pane){
     overlay.querySelector('[data-cancel]').addEventListener('click', close);
     addBtn.addEventListener('click', ()=>{
       if(!total()) return;
-      addFcLines(list.map((product, i) => ({product, count: counts[i]})).filter(x => x.count));
+      addLines(list.map((product, i) => ({product, count: counts[i]})).filter(x => x.count));
       close();
     });
     document.body.appendChild(overlay);
-  });
+  };
+  if(fcBtn) fcBtn.addEventListener('click', ()=> awcPickFilterCleans(addFcLines));
+  awcWireQuote();
   document.getElementById('awcAddLine').addEventListener('click', ()=>{
     awcLineItems.push({description: '', qty: '', price: ''});
     awcRenderLines();
@@ -15491,13 +16226,20 @@ function awcApply(){
     b.className = 'btn ' + (b.dataset.kind === awcKind ? 'btn-primary' : 'btn-ghost');
   });
   document.getElementById('awcMainTab').textContent = awcKind;
-  document.querySelectorAll('#awcViewRow [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === awcView));
-  document.getElementById('awcWoForm').style.display = (awcView === 'main' && !isTask) ? '' : 'none';
+  document.querySelectorAll('#awcViewRow [data-view]').forEach(b => { b.className = 'btn ' + (b.dataset.view === awcView ? 'btn-primary' : 'btn-ghost'); });
+  const isQuote = awcKind === 'Quote';
+  document.getElementById('awcQuoteForm').style.display = (awcView === 'main' && isQuote) ? '' : 'none';
+  document.getElementById('awcWoForm').style.display = (awcView === 'main' && !isTask && !isQuote) ? '' : 'none';
+  const curSub = document.getElementById('awcCurSub');
+  if(curSub) curSub.textContent = isQuote ? 'Quotes sent and waiting on an answer, and ones answered in the last 30 days.' : 'Work orders and tasks still to be done.';
+  const curTech = document.getElementById('awcCurTech');
+  if(curTech) curTech.style.display = isQuote ? 'none' : '';
   document.getElementById('awcTaskForm').style.display = (awcView === 'main' && isTask) ? '' : 'none';
   document.getElementById('awcCurrent').style.display = awcView === 'current' ? '' : 'none';
   document.getElementById('awcHistory').style.display = awcView === 'history' ? '' : 'none';
   if(awcView === 'main'){
     document.getElementById('awcWoNumber').textContent = '#' + String(awcNextWorkOrderNumber()).padStart(4, '0');
+    awcShowQuoteNumber();
     const dl = document.getElementById('awcProducts');
     dl.innerHTML = (lsGet('productsServices') || []).filter(p => p && p.name)
       .map(p => '<option value="' + awcEsc(p.name) + '"></option>').join('');
@@ -15558,7 +16300,8 @@ function awcWireSearch(inputId, boxId, picked, onPick){
 }
 
 function awcRenderChips(){
-  [['awcWoChips', ()=> awcWoCustomers, ids => { awcWoCustomers = ids; }],
+  [['awcQuoteChips', ()=> awcQuoteCustomers, ids => { awcQuoteCustomers = ids; }],
+   ['awcWoChips', ()=> awcWoCustomers, ids => { awcWoCustomers = ids; }],
    ['awcTaskChips', ()=> awcTaskCustomers, ids => { awcTaskCustomers = ids; }]].forEach(([boxId, get, set])=>{
     const box = document.getElementById(boxId);
     if(!box) return;
@@ -15588,17 +16331,30 @@ function awcTotal(){
   return total;
 }
 
-function awcRenderLines(){
-  const box = document.getElementById('awcLines');
+function awcRenderLines(boxId){
+  // The work order's lines, or the quote's (Oct 15): the same rows for both
+  const isQuote = boxId === 'awcQuoteLines';
+  const box = document.getElementById(isQuote ? 'awcQuoteLines' : 'awcLines');
+  if(!box) return;
+  const items = isQuote ? awcQuoteLines : awcLineItems;
+  const total = isQuote ? awcQuoteTotal : awcTotal;
   box.innerHTML = '';
-  awcLineItems.forEach((item, i)=>{
+  items.forEach((item, i)=>{
     const row = document.createElement('div');
     row.className = 'awc-line';
+    // The description with its own list of matching products underneath (Oct
+    // 15): the phone's built-in list showed nothing while typing
+    const descWrap = document.createElement('div');
+    descWrap.style.cssText = 'position:relative;flex:2;min-width:0;display:flex;';
     const desc = document.createElement('input');
     desc.placeholder = 'Description';
     desc.value = item.description || '';
-    desc.style.flex = '2';
-    desc.setAttribute('list', 'awcProducts');
+    desc.style.cssText = 'flex:1;width:100%;min-width:0;';
+    desc.setAttribute('autocomplete', 'off');
+    const sug = document.createElement('div');
+    sug.className = 'awc-suggest';
+    sug.style.top = '100%';
+    descWrap.appendChild(desc); descWrap.appendChild(sug);
     const qty = document.createElement('input');
     qty.type = 'number'; qty.step = 'any'; qty.inputMode = 'decimal';
     qty.placeholder = 'Qty';
@@ -15615,6 +16371,40 @@ function awcRenderLines(){
     price.value = item.price;
     price.style.cssText = 'flex:1;width:100%;padding-left:22px;';
     priceWrap.appendChild(dollar); priceWrap.appendChild(price);
+    const hideSug = ()=>{ sug.style.display = 'none'; sug.innerHTML = ''; };
+    const showSug = ()=>{
+      const t = desc.value.trim().toLowerCase();
+      if(!t){ hideSug(); return; }
+      const named = (lsGet('productsServices') || []).filter(p => p && p.name && String(p.name).toLowerCase().includes(t) && String(p.name) !== desc.value);
+      named.sort((x, y)=>{
+        const xs = String(x.name).toLowerCase().startsWith(t) ? 0 : 1, ys = String(y.name).toLowerCase().startsWith(t) ? 0 : 1;
+        return xs - ys || String(x.name).localeCompare(String(y.name));
+      });
+      sug.innerHTML = '';
+      named.slice(0, 8).forEach(p=>{
+        const opt = document.createElement('div');
+        opt.style.cssText = 'display:flex;align-items:center;gap:10px;';
+        const nm = document.createElement('span');
+        nm.style.cssText = 'flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        nm.textContent = p.name;
+        opt.appendChild(nm);
+        if(p.price !== undefined && p.price !== null && p.price !== ''){
+          const pr = document.createElement('span');
+          pr.style.cssText = "flex-shrink:0;font-size:12.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;";
+          pr.textContent = '$' + (Number(p.price) || 0).toFixed(2);
+          opt.appendChild(pr);
+        }
+        opt.addEventListener('mousedown', e=>{
+          e.preventDefault();
+          desc.value = p.name;
+          desc.dispatchEvent(new Event('input', {bubbles: true}));
+          hideSug();
+          try{ desc.blur(); }catch(err){}
+        });
+        sug.appendChild(opt);
+      });
+      sug.style.display = sug.children.length ? 'block' : 'none';
+    };
     desc.addEventListener('input', ()=>{
       item.description = desc.value;
       // Anything entered starts with a quantity of one
@@ -15627,20 +16417,543 @@ function awcRenderLines(){
         item.price = match.price == null ? '' : match.price;
         price.value = item.price;
       }
-      awcTotal();
+      total();
     });
-    qty.addEventListener('input', ()=>{ item.qty = qty.value; awcTotal(); });
-    price.addEventListener('input', ()=>{ item.price = price.value; awcTotal(); });
+    desc.addEventListener('input', showSug);
+    desc.addEventListener('focus', showSug);
+    desc.addEventListener('blur', ()=> setTimeout(hideSug, 200));
+    qty.addEventListener('input', ()=>{ item.qty = qty.value; total(); });
+    price.addEventListener('input', ()=>{ item.price = price.value; total(); });
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'awc-x';
-    x.textContent = '\u00d7';
+    x.textContent = '×';
     x.setAttribute('aria-label', 'Remove line item');
-    x.addEventListener('click', ()=>{ awcLineItems.splice(i, 1); awcRenderLines(); });
-    row.appendChild(desc); row.appendChild(qty); row.appendChild(priceWrap); row.appendChild(x);
+    x.addEventListener('click', ()=>{ items.splice(i, 1); awcRenderLines(boxId); });
+    row.appendChild(descWrap); row.appendChild(qty); row.appendChild(priceWrap); row.appendChild(x);
     box.appendChild(row);
   });
-  awcTotal();
+  total();
+}
+
+// ---------- Quote (Oct 15) ----------
+// The website's quote, made on the phone. The same email (Approve, Decline and
+// Download quote), the same numbering, and the same record: it's sent to the
+// office whole (pushOfficeWork, kind 'quote'), so the website's Quotes → Current,
+// Alerts and the customer's Quotes & Orders have it, and quotes made on the
+// website show here.
+function awcCompanyName(){
+  const n = String(lsGet('companyName') || '').trim();
+  return n || 'Your pool service';
+}
+function awcQuoteNumberText(n){ return String(n).padStart(4, '0'); }
+function awcQuotes(){ return (lsGet('workOrders') || []).filter(w => w && w.id && (w.type || 'Quote') === 'Quote'); }
+function awcNextQuoteNumber(){
+  const used = awcQuotes().reduce((m, w) => Math.max(m, Number(w.number) || 0), 0);
+  return Math.max(used, Number(lsGet('quoteCounter')) || 0) + 1;
+}
+function awcShowQuoteNumber(){
+  const el = document.getElementById('awcQuoteNumber');
+  if(el) el.innerHTML = '<span class="num-hash">#</span>' + awcQuoteNumberText(awcNextQuoteNumber());
+}
+function awcQuoteTotal(){
+  const total = awcQuoteLines.reduce((sum, it) => sum + (parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0), 0);
+  const el = document.getElementById('awcQuoteTotal');
+  if(el) el.textContent = '$' + total.toFixed(2);
+  return total;
+}
+var AWC_QUOTE_ANSWER_DAYS = 30;
+function awcQuoteExpiresDays(){
+  const n = Math.round(Number((document.getElementById('awcQuoteExpires') || {}).value));
+  return n >= 1 && n <= 365 ? n : AWC_QUOTE_ANSWER_DAYS;
+}
+var AWC_QUOTE_EMAIL_DEFAULTS = {
+  header: '', subheader: '',
+  closing: 'Questions, or ready to go ahead? Just reply to this email.',
+  signoff: null, showContact: true
+};
+function awcQuoteEmailStyle(){
+  return Object.assign({}, AWC_QUOTE_EMAIL_DEFAULTS, lsGet('quoteEmailStyle') || {});
+}
+// Which quote codes have their breakdown on the server (so the email offers Download)
+var awcQuoteCanDownload = {};
+function awcQuoteLinkCanDownload(url){
+  const m = String(url || '').match(/[?&]t=([0-9a-f]+)/);
+  return !!(m && awcQuoteCanDownload[m[1]]);
+}
+
+// The quote's secret code on the server, as the website makes it: the
+// customer's Approve or Decline is recorded against it, and its breakdown is
+// what Download quote gives them (snippet 34)
+async function awcRegisterQuote(quoteId, expiresDays, details){
+  try{
+    const company = deviceGet('company');
+    if(!company || !company.id) return null;
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    const put = withDetails => fieldAuthed('/rest/v1/quote_responses?on_conflict=company_id,quote_id', {
+      method: 'POST',
+      headers: {'Prefer': 'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(Object.assign({company_id: company.id, quote_id: quoteId, token: token, outcome: null,
+        responded_at: null, created_at: new Date().toISOString()},
+        expiresDays && expiresDays !== AWC_QUOTE_ANSWER_DAYS ? {expires_days: expiresDays} : {},
+        withDetails ? {details: details} : {}))
+    });
+    let res = await put(!!details);
+    let canDownload = !!details && res.ok;
+    // A server without snippet 34 yet: still Approve and Decline, no Download
+    if(details && !res.ok && !res.offline){ res = await put(false); canDownload = false; }
+    if(!res.ok) return null;
+    awcQuoteCanDownload[token] = canDownload;
+    return new URL('quote-response.html', location.href).href.split('?')[0]
+      + '?s=' + encodeURIComponent(FIELD_SUPABASE_URL) + '&t=' + token;
+  }catch(e){ return null; }
+}
+
+function awcWireQuote(){
+  document.getElementById('awcQuoteDate').value = todayDateStr();
+  awcWireSearch('awcQuoteSearch', 'awcQuoteSuggest', ()=> awcQuoteCustomers, id=>{ awcQuoteCustomers.push(id); awcRenderChips(); });
+  document.getElementById('awcQuoteAddLine').addEventListener('click', ()=>{
+    awcQuoteLines.push({description: '', qty: '', price: ''});
+    awcRenderLines('awcQuoteLines');
+  });
+  document.getElementById('awcQuoteAddFilterClean').addEventListener('click', ()=>{
+    awcPickFilterCleans(picks=>{
+      picks.forEach(({product, count})=>{
+        for(let i = 0; i < count; i++){
+          const item = {description: product ? product.name : 'Filter clean', qty: '1',
+            price: product && product.price != null && product.price !== '' ? String(product.price) : '', filterClean: true};
+          const blank = awcQuoteLines.findIndex(li => !String(li.description || '').trim() && !String(li.price || '').trim());
+          if(blank !== -1) awcQuoteLines[blank] = item; else awcQuoteLines.push(item);
+        }
+      });
+      awcRenderLines('awcQuoteLines');
+    });
+  });
+  document.getElementById('awcQuoteSend').addEventListener('click', awcSendQuote);
+  document.getElementById('awcQuoteClear').addEventListener('click', awcClearQuote);
+  document.getElementById('awcQuoteCustomize').addEventListener('click', awcCustomizeQuoteEmail);
+  awcRenderLines('awcQuoteLines');
+  awcShowQuoteNumber();
+}
+
+function awcClearQuote(){
+  awcQuoteCustomers = [];
+  awcQuoteLines = [{description: '', qty: '', price: ''}];
+  document.getElementById('awcQuoteSearch').value = '';
+  document.getElementById('awcQuoteNotes').value = '';
+  document.getElementById('awcQuoteName').value = '';
+  document.getElementById('awcQuoteDate').value = todayDateStr();
+  document.getElementById('awcQuoteExpires').value = String(AWC_QUOTE_ANSWER_DAYS);
+  awcRenderChips(); awcRenderLines('awcQuoteLines'); awcShowQuoteNumber();
+}
+
+async function awcSendQuote(){
+  const btn = document.getElementById('awcQuoteSend');
+  if(btn.disabled) return;
+  const picked = awcQuoteCustomers.map(id => (customers || []).find(c => c && String(c.id) === String(id))).filter(Boolean);
+  if(!picked.length){ showToast('Add at least one customer'); return; }
+  const items = awcQuoteLines.filter(it => it && String(it.description || '').trim())
+    .map(it => Object.assign({}, it, {description: String(it.description).trim()}));
+  if(!items.length){ showToast('Add at least one line item'); return; }
+  if(!picked.some(c => c.email)){
+    showToast(picked.length === 1 ? 'This customer has no email on file' : 'None of these customers has an email on file');
+    return;
+  }
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Sending…';
+  const notes = document.getElementById('awcQuoteNotes').value.trim();
+  const name = document.getElementById('awcQuoteName').value.trim();
+  const total = items.reduce((sum, it) => sum + (parseFloat(it.qty) || 0) * (parseFloat(it.price) || 0), 0);
+  const dateISO = document.getElementById('awcQuoteDate').value || '';
+  const dateText = (dateISO ? new Date(dateISO + 'T12:00:00') : new Date())
+    .toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'});
+  const expiresDays = awcQuoteExpiresDays();
+  let sent = 0;
+  const notSent = [];
+  try{
+    for(const c of picked){
+      if(!c.email){ notSent.push((c.name || 'Customer') + ' (no email on file)'); continue; }
+      const quoteId = 'wo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      const number = awcNextQuoteNumber();
+      lsSet('quoteCounter', number);
+      queueSetupSend('quoteCounter');
+      const details = awcQuoteDownloadDetails(c, 'Quote', dateText, items, total, notes, number, expiresDays, name);
+      const respondUrl = await awcRegisterQuote(quoteId, expiresDays, details);
+      const html = awcQuoteEmailHtml(c, 'Quote', dateText, items, total, notes, null, respondUrl, number, expiresDays);
+      const subject = 'Quote from ' + awcCompanyName() + ' — ' + c.name;
+      const res = await fieldAuthed('/functions/v1/send-report', {
+        method: 'POST',
+        body: JSON.stringify({to: c.email, subject: subject, html: html, customerId: c.id})
+      });
+      const ok = !!res.ok;
+      // Kept as the website keeps it, and sent to the office whole
+      const list = lsGet('workOrders') || [];
+      list.push(Object.assign({
+        number: number, name: name, emailHtml: html, emailSubject: subject, id: quoteId,
+        customerId: c.id, type: 'Quote', lineItems: items.map(it => Object.assign({}, it)), notes: notes,
+        total: total, date: dateISO, createdAt: new Date().toISOString(), status: ok ? 'sent' : 'draft'
+      }, expiresDays ? {expiresDays: expiresDays} : {}));
+      lsSet('workOrders', list);
+      queueOfficeWork('quote', quoteId);
+      if(ok) sent++;
+      else notSent.push((c.name || 'Customer') + (res.offline ? ' (no signal)' : ''));
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+  try{ fieldSync(); }catch(e){}
+  if(!notSent.length){
+    showToast('Quote sent to ' + (sent === 1 ? (picked[0].name || 'the customer') : sent + ' customers'));
+    awcClearQuote();
+  } else {
+    showToast((sent ? 'Sent to ' + sent + '. ' : '') + 'Not sent: ' + notSent.join(', ') + ' — it’s saved; try again with a connection.');
+    awcShowQuoteNumber();
+  }
+}
+
+// Customers' answers, straight from the server, so the Quote tab is up to date
+// even with no office computer open. Each answer is sent on to the office too.
+var awcAnswersAt = 0;
+async function awcCheckQuoteAnswers(){
+  if(Date.now() - awcAnswersAt < 30000) return;
+  awcAnswersAt = Date.now();
+  try{
+    const res = await fieldAuthed('/rest/v1/quote_responses?select=quote_id,outcome,responded_at&outcome=not.is.null', {method: 'GET'});
+    if(!res.ok || !Array.isArray(res.body)) return;
+    const list = lsGet('workOrders') || [];
+    let changed = false;
+    res.body.forEach(a=>{
+      const w = list.find(x => x && x.id === a.quote_id);
+      if(!w) return;
+      const approved = a.outcome === 'approved';
+      if(w.closed && !w.expired && !!w.approved === approved && !!w.denied === !approved) return;
+      w.closed = true; w.approved = approved; w.denied = !approved; w.expired = false;
+      w[approved ? 'approvedAt' : 'deniedAt'] = a.responded_at || new Date().toISOString();
+      w.answeredByCustomer = true;
+      queueOfficeWork('quote', w.id);
+      changed = true;
+    });
+    if(changed){
+      lsSet('workOrders', list);
+      if(awcKind === 'Quote' && awcView === 'current') awcRenderQuoteCurrent();
+    }
+  }catch(e){}
+}
+
+function awcQuoteStatus(w){
+  const days = Number(w.expiresDays) || AWC_QUOTE_ANSWER_DAYS;
+  const sentAt = new Date(w.createdAt || 0).getTime();
+  if(w.approved) return {key: 'approved', text: 'APPROVED', colour: '#3E8F5F'};
+  if(w.denied) return {key: 'declined', text: 'DECLINED', colour: '#B8492E'};
+  if(w.expired || (sentAt && Date.now() - sentAt > days * 86400000)) return {key: 'expired', text: 'EXPIRED', colour: '#8A9997'};
+  if(w.status === 'draft') return {key: 'draft', text: 'NOT SENT', colour: '#B8492E'};
+  return {key: 'pending', text: 'PENDING', colour: '#B07D1A'};
+}
+
+function awcRenderQuoteCurrent(){
+  const box = document.getElementById('awcCurList');
+  if(!box) return;
+  awcCheckQuoteAnswers();
+  const day = iso => iso ? new Date(iso).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : '';
+  const recent = Date.now() - 30 * 86400000;
+  const rows = awcQuotes().map(w => ({w: w, st: awcQuoteStatus(w)})).filter(({w, st})=>{
+    if(st.key === 'pending' || st.key === 'draft') return true;
+    if(st.key === 'approved' || st.key === 'declined'){
+      const at = new Date(w.approvedAt || w.deniedAt || 0).getTime();
+      return at >= recent;
+    }
+    return false;
+  }).sort((a, b) => String(b.w.createdAt || '').localeCompare(String(a.w.createdAt || '')));
+  box.innerHTML = '';
+  if(!rows.length){
+    box.innerHTML = '<div style="font-size:13.5px;color:var(--muted);padding:12px 2px;">No quotes waiting on an answer.</div>';
+    return;
+  }
+  rows.slice(0, awcShown).forEach(({w, st})=>{
+    const row = document.createElement('div');
+    row.className = 'awc-row';
+    row.style.cursor = 'pointer';
+    const top = document.createElement('div');
+    top.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const nm = document.createElement('b');
+    nm.style.cssText = 'font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nm.textContent = awcCustName(w.customerId) || 'Customer';
+    const badge = document.createElement('span');
+    badge.style.cssText = 'margin-left:auto;flex-shrink:0;display:inline-flex;justify-content:center;min-width:82px;padding:4px 8px;'
+      + 'border-radius:7px;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#fff;background:' + st.colour + ';';
+    badge.textContent = st.text;
+    top.appendChild(nm); top.appendChild(badge);
+    const what = document.createElement('div');
+    what.style.cssText = 'font-size:13px;color:var(--muted);margin-top:3px;';
+    const title = w.name || (w.lineItems || []).map(li => li && li.description).filter(Boolean).join(', ');
+    what.textContent = ['Quote' + (w.number ? ' #' + awcQuoteNumberText(w.number) : ''), title, '$' + (Number(w.total) || 0).toFixed(2)]
+      .filter(Boolean).join(' · ');
+    const when = document.createElement('div');
+    when.style.cssText = 'font-size:12.5px;color:var(--muted);margin-top:2px;';
+    const days = Number(w.expiresDays) || AWC_QUOTE_ANSWER_DAYS;
+    when.textContent = st.key === 'approved' ? 'Approved ' + day(w.approvedAt)
+      : st.key === 'declined' ? 'Declined ' + day(w.deniedAt)
+      : st.key === 'draft' ? 'Not emailed yet'
+      : 'Sent ' + day(w.createdAt) + ' · expires ' + day(new Date(new Date(w.createdAt).getTime() + days * 86400000).toISOString());
+    row.appendChild(top); row.appendChild(what); row.appendChild(when);
+    row.addEventListener('click', ()=> awcOpenQuote(w));
+    box.appendChild(row);
+  });
+  awcMoreButton(box, rows.length, awcRenderQuoteCurrent);
+}
+
+// A quote as the customer got it, with Copy to a new quote
+function awcOpenQuote(w){
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const card = document.createElement('div');
+  card.className = 'confirm-box';
+  card.style.cssText = 'max-width:560px;width:100%;display:flex;flex-direction:column;max-height:88vh;';
+  const h = document.createElement('h3');
+  h.style.cssText = 'font-size:16px;margin:0 0 4px;';
+  h.textContent = 'Quote' + (w.number ? ' #' + awcQuoteNumberText(w.number) : '') + ' — ' + (awcCustName(w.customerId) || 'Customer');
+  const sub = document.createElement('p');
+  sub.style.cssText = 'font-size:12.5px;color:var(--muted);margin:0 0 10px;';
+  sub.textContent = w.createdAt ? 'Sent ' + new Date(w.createdAt).toLocaleString() : '';
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'flex:1;min-height:360px;width:100%;border:1px solid var(--line);border-radius:10px;background:#F4F6F5;';
+  frame.setAttribute('sandbox', '');
+  frame.srcdoc = w.emailHtml || awcQuoteEmailHtml((customers || []).find(c => c && c.id === w.customerId) || {name: 'Customer'},
+    'Quote', w.date || '', w.lineItems || [], Number(w.total) || 0, w.notes || '', null, null, w.number);
+  const btns = document.createElement('div');
+  btns.className = 'btn-row';
+  btns.style.cssText = 'margin-top:12px;flex-wrap:nowrap;';
+  const copy = document.createElement('button');
+  copy.type = 'button'; copy.className = 'btn btn-ghost'; copy.style.cssText = 'flex:1 1 0;min-width:0;';
+  copy.textContent = 'Copy to a new quote';
+  const close = document.createElement('button');
+  close.type = 'button'; close.className = 'btn btn-primary'; close.style.cssText = 'flex:1 1 0;min-width:0;';
+  close.textContent = 'Close';
+  const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  close.addEventListener('click', shut);
+  copy.addEventListener('click', ()=>{
+    shut();
+    awcQuoteCustomers = w.customerId ? [w.customerId] : [];
+    awcQuoteLines = (w.lineItems || []).map(li => Object.assign({}, li));
+    if(!awcQuoteLines.length) awcQuoteLines = [{description: '', qty: '', price: ''}];
+    document.getElementById('awcQuoteName').value = w.name || '';
+    document.getElementById('awcQuoteNotes').value = w.notes || '';
+    document.getElementById('awcQuoteDate').value = todayDateStr();
+    awcView = 'main'; awcApply();
+    awcRenderChips(); awcRenderLines('awcQuoteLines');
+    showToast('Copied — change anything, then Send to customer');
+  });
+  btns.appendChild(copy); btns.appendChild(close);
+  card.appendChild(h); card.appendChild(sub); card.appendChild(frame); card.appendChild(btns);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
+// The top and bottom of a quote email, the same settings as the website's
+// Customize email (kept for the company, so both use them)
+function awcCustomizeQuoteEmail(){
+  const q = awcQuoteEmailStyle();
+  const report = lsGet('reportEmailStyle') || {};
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const card = document.createElement('div');
+  card.className = 'confirm-box';
+  card.style.cssText = 'max-width:440px;width:100%;max-height:88vh;overflow-y:auto;';
+  card.innerHTML = '<h3 style="font-size:17px;margin:0 0 4px;">Customize email</h3>'
+    + '<p style="font-size:13px;color:var(--muted);margin:0 0 14px;">The top and bottom of every quote email, here and on the website.</p>'
+    + '<div class="field"><label>Header</label><input data-f="header"></div>'
+    + '<div class="field"><label>Line under the header (optional)</label><input data-f="subheader" placeholder="e.g. Licensed &amp; insured"></div>'
+    + '<div class="field"><label>Closing line</label><textarea data-f="closing" rows="2"></textarea></div>'
+    + '<div class="field"><label>Sign-off</label><input data-f="signoff"></div>'
+    + '<label class="inline-check" style="margin:2px 0 16px;"><input type="checkbox" data-f="showContact"> Show phone, email and website</label>'
+    + '<div class="btn-row" style="flex-wrap:nowrap;margin-bottom:10px;">'
+    + '<button type="button" class="btn btn-ghost" data-preview style="flex:1 1 0;min-width:0;">Preview</button>'
+    + '<button type="button" class="btn btn-ghost" data-reset style="flex:1 1 0;min-width:0;">Reset to default</button></div>'
+    + '<button type="button" class="btn btn-primary" data-save style="margin-bottom:8px;">Save</button>'
+    + '<button type="button" class="btn btn-ghost" data-cancel>Cancel</button>';
+  const f = k => card.querySelector('[data-f="' + k + '"]');
+  const fill = v=>{
+    f('header').value = v.header || '';
+    f('header').placeholder = awcCompanyName();
+    f('subheader').value = v.subheader || '';
+    f('closing').value = v.closing || '';
+    f('signoff').value = v.signoff !== null && v.signoff !== undefined ? v.signoff
+      : (report.signoff !== undefined ? report.signoff : 'Thank you for your business.');
+    f('showContact').checked = v.showContact !== false;
+  };
+  const values = ()=> ({header: f('header').value, subheader: f('subheader').value, closing: f('closing').value,
+    signoff: f('signoff').value, showContact: f('showContact').checked});
+  fill(q);
+  const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  card.querySelector('[data-cancel]').addEventListener('click', shut);
+  card.querySelector('[data-reset]').addEventListener('click', ()=> fill(AWC_QUOTE_EMAIL_DEFAULTS));
+  card.querySelector('[data-save]').addEventListener('click', ()=>{
+    lsSet('quoteEmailStyle', values());
+    queueSetupSend('quoteEmailStyle');
+    try{ fieldSync(); }catch(e){}
+    shut();
+    showToast('Quote email saved');
+  });
+  card.querySelector('[data-preview]').addEventListener('click', ()=>{
+    const sample = {name: 'Sample Customer', address: '123 Main St'};
+    const html = awcQuoteEmailHtml(sample, 'Quote', new Date().toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'}),
+      [{description: 'Variable-speed pump', qty: 1, price: 1249}, {description: 'Install labour', qty: 2, price: 95}],
+      1439, 'Sample notes.', values(), null, awcNextQuoteNumber(), awcQuoteExpiresDays());
+    const pv = document.createElement('div');
+    pv.className = 'confirm-overlay';
+    pv.style.zIndex = '400';
+    const pc = document.createElement('div');
+    pc.className = 'confirm-box';
+    pc.style.cssText = 'max-width:560px;width:100%;display:flex;flex-direction:column;max-height:88vh;';
+    const fr = document.createElement('iframe');
+    fr.setAttribute('sandbox', '');
+    fr.style.cssText = 'flex:1;min-height:420px;width:100%;border:1px solid var(--line);border-radius:10px;';
+    fr.srcdoc = html;
+    const done = document.createElement('button');
+    done.type = 'button'; done.className = 'btn btn-primary'; done.style.marginTop = '12px'; done.textContent = 'Close';
+    done.addEventListener('click', ()=> pv.remove());
+    pc.appendChild(fr); pc.appendChild(done); pv.appendChild(pc);
+    document.body.appendChild(pv);
+  });
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
+function awcQuoteEmailHtml(customer, type, dateText, items, total, notes, styleOverride, respondUrl, quoteNumber, expiresDays){
+  const style = lsGet('reportEmailStyle') || {};
+  const q = styleOverride || awcQuoteEmailStyle();
+  const colour = style.colour || '#134E4A';
+  const company = awcCompanyName();
+  const headerText = (q.header || '').trim() || company;
+  const money = n => '$' + (Number(n) || 0).toFixed(2);
+  const cell = 'padding:9px 10px;border-bottom:1px solid #E6E9E8;font-size:14px;';
+  const head = 'padding:8px 10px;border-bottom:2px solid #E6E9E8;font-size:11.5px;font-weight:700;'
+    + 'color:#0F766E;text-transform:uppercase;letter-spacing:0.05em;';
+
+  const rows = items.map(item=>{
+    const qty = parseFloat(item.qty) || 0;
+    const price = parseFloat(item.price) || 0;
+    return '<tr>'
+      + '<td style="' + cell + 'color:#16302E;">' + awcEsc(item.description) + '</td>'
+      + '<td style="' + cell + 'color:#4A5A58;text-align:center;white-space:nowrap;">' + awcEsc(String(qty)) + '</td>'
+      + '<td style="' + cell + 'color:#4A5A58;text-align:right;white-space:nowrap;">' + money(price) + '</td>'
+      + '<td style="' + cell + 'color:#16302E;font-weight:600;text-align:right;white-space:nowrap;">' + money(qty * price) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  const bits = [];
+  const plain = t => '<span style="color:#4A5A58;text-decoration:none;">' + awcEsc(t) + '</span>';
+  if(q.showContact !== false){
+    if(lsGet('accountPhone')) bits.push(plain(lsGet('accountPhone')));
+    if(lsGet('accountEmail')) bits.push(plain(lsGet('accountEmail')));
+    if(lsGet('businessWebsite')) bits.push(plain(lsGet('businessWebsite')));
+  }
+  const signoff = q.signoff !== null && q.signoff !== undefined ? q.signoff
+    : (style.signoff !== undefined ? style.signoff : 'Thank you for your business.');
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<meta name="format-detection" content="telephone=no,address=no,email=no,date=no">'
+    + '<style>a[href^="tel"],a[href^="mailto"],a[href^="http"],a[x-apple-data-detectors]{'
+    + 'color:inherit !important;text-decoration:none !important;font-size:inherit !important;'
+    + 'font-family:inherit !important;font-weight:inherit !important;}</style>'
+    + '</head><body style="margin:0;padding:0;background:#F4F6F5;">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F6F5;padding:24px 12px;">'
+    + '<tr><td align="center">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+    + 'style="max-width:580px;background:#FFFFFF;border-radius:12px;overflow:hidden;'
+    + 'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;">'
+    // Header
+    + '<tr><td style="background:' + awcEsc(colour) + ';padding:22px 26px;">'
+    + '<div style="font-size:19px;font-weight:700;color:#FFFFFF;">' + awcEsc(headerText) + '</div>'
+    + ((q.subheader || '').trim() ? '<div style="font-size:13px;color:#FFFFFF;opacity:0.85;margin-top:4px;">'
+        + awcEsc(q.subheader.trim()) + '</div>' : '')
+    + '</td></tr>'
+    // What, who and when
+    + '<tr><td style="padding:24px 26px 0;">'
+    // The top line: QUOTE, with the quote's number just to its right
+    + '<div style="font-size:12px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">'
+    + awcEsc(type)
+    // The number as on the form: large, with a light # (Oct 2)
+    + (quoteNumber ? '<span style="display:inline-block;vertical-align:middle;margin-left:10px;'
+        + 'font-family:\'Space Grotesk\',Arial,Helvetica,sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.01em;color:#0E4A4D;text-transform:none;line-height:1;">'
+        + '<span style="color:#A9BCB9;font-weight:500;">#</span>' + awcEsc(awcQuoteNumberText(quoteNumber)) + '</span>' : '')
+    + '</div>'
+    + '<div style="font-size:17px;font-weight:700;color:#16302E;">' + awcEsc(customer.name) + '</div>'
+    + (customer.address ? '<div style="font-size:13.5px;color:#6B7B79;margin-top:3px;">' + awcEsc(customer.address) + '</div>' : '')
+    + '<div style="font-size:13.5px;color:#6B7B79;margin-top:3px;">' + awcEsc(dateText) + '</div>'
+    + '</td></tr>'
+    // The items
+    + '<tr><td style="padding:20px 26px 0;">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">'
+    + '<tr><td style="' + head + '">Item</td><td style="' + head + 'text-align:center;">Qty</td>'
+    + '<td style="' + head + 'text-align:right;">Price</td><td style="' + head + 'text-align:right;">Amount</td></tr>'
+    + rows
+    + '<tr><td colspan="3" style="padding:12px 10px 0;font-size:14.5px;font-weight:700;color:#16302E;text-align:right;">Total</td>'
+    + '<td style="padding:12px 10px 0;font-size:16px;font-weight:700;color:#16302E;text-align:right;white-space:nowrap;">' + money(total) + '</td></tr>'
+    + '</table></td></tr>'
+    // Notes
+    + (notes ? '<tr><td style="padding:20px 26px 0;">'
+        + '<div style="font-size:12px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Notes</div>'
+        + '<div style="font-size:14px;color:#4A5A58;line-height:1.5;white-space:pre-wrap;">' + awcEsc(notes) + '</div></td></tr>' : '')
+    // Footer
+    + '<tr><td style="padding:26px;">'
+    // How long this quote is good for (quotes sent with a set number of days)
+    + (expiresDays ? '<div style="font-size:13.5px;color:#4A5A58;margin:0 0 4px;">This quote expires in <strong>'
+        + expiresDays + (expiresDays === 1 ? ' day' : ' days') + '</strong>, on '
+        + awcEsc(new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1000).toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'}))
+        + '.</div>' : '')
+    // Approve / Deny, when the quote can take an answer
+    + (respondUrl ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 6px;width:100%;"><tr>'
+        + '<td style="padding-right:6px;width:50%;"><a href="' + respondUrl + '&a=approve" style="display:block;text-align:center;padding:13px 10px;border-radius:10px;background:' + colour + ';color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;">Approve</a></td>'
+        + '<td style="padding-left:6px;width:50%;"><a href="' + respondUrl + '&a=deny" style="display:block;text-align:center;padding:13px 10px;border-radius:10px;background:#ffffff;color:#B8492E;border:1.5px solid #EFC9BC;font-weight:700;font-size:15px;text-decoration:none;">Decline</a></td>'
+        + '</tr></table>'
+        // Download quote (Oct 15): the breakdown as a PDF to keep
+        + (!awcQuoteLinkCanDownload(respondUrl) ? '' : '<a href="' + respondUrl + '&a=download" style="display:block;text-align:center;margin:12px 0 6px;padding:12px 10px;border-radius:10px;'
+        + 'background:#F1F8F7;color:' + awcEsc(colour) + ';border:1.5px solid #BFDCD8;font-weight:700;font-size:14.5px;text-decoration:none;">'
+        + '&#8615;&nbsp; Download ' + awcEsc(String(type || 'Quote').toLowerCase()) + ' (PDF)</a>') : '')
+    + (((q.closing || '').trim() || signoff) ? '<div style="font-size:14px;color:#4A5A58;padding-top:18px;border-top:1px solid #E6E9E8;white-space:pre-wrap;">'
+        + awcEsc((q.closing || '').trim())
+        + ((q.closing || '').trim() && signoff ? '<br>' : '') + (signoff ? awcEsc(signoff) : '') + '</div>' : '')
+    + '<div style="font-size:13.5px;font-weight:600;color:#16302E;margin-top:10px;">' + awcEsc(company) + '</div>'
+    + (bits.length ? '<div style="font-size:12.5px;color:#4A5A58;margin-top:4px;">' + bits.join(' &nbsp;&middot;&nbsp; ') + '</div>' : '')
+    + (lsGet('licenseNumber') ? '<div style="font-size:11.5px;color:#8A9997;margin-top:3px;">License ' + awcEsc(lsGet('licenseNumber')) + '</div>' : '')
+    + '</td></tr>'
+    + '</table></td></tr></table></body></html>';
+}
+
+function awcQuoteDownloadDetails(customer, type, dateText, items, total, notes, quoteNumber, expiresDays, quoteName){
+  const style = lsGet('reportEmailStyle') || {};
+  const q = awcQuoteEmailStyle();
+  const signoff = q.signoff !== null && q.signoff !== undefined ? q.signoff
+    : (style.signoff !== undefined ? style.signoff : 'Thank you for your business.');
+  const expiresOn = expiresDays
+    ? new Date(Date.now() + expiresDays * 86400000).toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'})
+    : '';
+  return {
+    v: 1,
+    type: type || 'Quote',
+    number: quoteNumber ? awcQuoteNumberText(quoteNumber) : '',
+    name: quoteName || '',
+    date: dateText || '',
+    expiresOn: expiresOn,
+    customer: {name: customer.name || '', address: customer.address || ''},
+    items: (items || []).map(li => ({description: String(li.description || ''), qty: parseFloat(li.qty) || 0, price: parseFloat(li.price) || 0})),
+    total: Number(total) || 0,
+    notes: notes || '',
+    colour: style.colour || '#134E4A',
+    company: {
+      name: awcCompanyName(),
+      phone: q.showContact !== false ? (lsGet('accountPhone') || '') : '',
+      email: q.showContact !== false ? (lsGet('accountEmail') || '') : '',
+      website: q.showContact !== false ? (lsGet('businessWebsite') || '') : '',
+      license: lsGet('licenseNumber') || ''
+    },
+    signoff: signoff || ''
+  };
 }
 
 function awcLabelTechs(){
@@ -16476,6 +17789,7 @@ function awcOpenForEditing(isTask, r){
 
 // Current: what's still on the routes, soonest first
 function awcRenderCurrent(){
+  if(awcKind === 'Quote'){ awcRenderQuoteCurrent(); return; }
   const box = document.getElementById('awcCurList');
   const tech = awcTechMenu('awcCurTech');
   const isTask = awcKind === 'Task';
@@ -16744,7 +18058,14 @@ function showCustomerPane(which){
   const a = document.getElementById('btnCustPaneList'), b = document.getElementById('btnCustPaneWork');
   if(!a || !b) return;
   a.addEventListener('click', ()=> showCustomerPane('list'));
-  b.addEventListener('click', ()=> showCustomerPane('work'));
+  b.addEventListener('click', ()=>{
+    // Pressing WorkCenter always opens on Quote (Oct 15), unless something
+    // opened from Current is being changed there
+    const already = document.getElementById('custPaneWork');
+    const showing = already && already.style.display !== 'none';
+    if(!showing && !(typeof awcEdit !== 'undefined' && awcEdit)){ awcKind = 'Quote'; awcView = 'main'; awcShown = 20; }
+    showCustomerPane('work');
+  });
   // Opening a customer's form from anywhere brings the Customers side back
   const form = document.getElementById('newCustomerCard');
   if(form) new MutationObserver(()=>{
@@ -17215,6 +18536,111 @@ function captureVisitDraft(){
 }
 
 
+// ---------- A report in progress kept through the phone closing the app (Oct 14) ----------
+// Tyrus took an after photo, turned the phone off, and the photo was gone. The
+// phone had closed the app while it was off (phones do that to save power, and
+// after the camera), and everything not yet saved lived only on screen. Now the
+// report being done — what's typed, which step, and every photo taken — is kept
+// on the phone as it changes, and brought back when the app opens again the
+// same day. It's let go once the report is submitted or cancelled.
+const VIP_DB = 'weirVisitInProgress', VIP_STORE = 'v', VIP_KEY = 'current';
+let vipDbPromise = null, vipLastSig = '', vipRestoring = false, vipTimer = null;
+function vipDb(){
+  if(vipDbPromise) return vipDbPromise;
+  vipDbPromise = new Promise((resolve, reject)=>{
+    if(!window.indexedDB){ reject(new Error('no indexeddb')); return; }
+    let req;
+    try{ req = indexedDB.open(VIP_DB, 1); }catch(e){ reject(e); return; }
+    req.onupgradeneeded = ()=>{ const db = req.result; if(!db.objectStoreNames.contains(VIP_STORE)) db.createObjectStore(VIP_STORE); };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error || new Error('indexeddb failed'));
+  });
+  return vipDbPromise;
+}
+function vipDo(mode, fn){
+  return vipDb().then(db => new Promise((resolve, reject)=>{
+    const tx = db.transaction(VIP_STORE, mode);
+    let req;
+    try{ req = fn(tx.objectStore(VIP_STORE)); }catch(e){ reject(e); return; }
+    tx.oncomplete = ()=> resolve(req && 'result' in req ? req.result : undefined);
+    tx.onerror = ()=> reject(tx.error || new Error('transaction failed'));
+  }));
+}
+function vipControllers(){
+  return {pool: poolPhotoController, spa: spaPhotoController, fountain: fountainPhotoController, gate: gatePhotoController,
+          poolBefore: poolBeforePhotoController, spaBefore: spaBeforePhotoController, fountainBefore: fountainBeforePhotoController};
+}
+async function saveVisitInProgress(){
+  if(vipRestoring) return;
+  if(!currentVisitCustomerId){ return; }
+  // Only a report still open: on screen, or left open while on another tab.
+  // One finished or cancelled is never kept again.
+  if(currentViewName !== 'visit' && !visitLeftOpenFor) return;
+  try{ captureVisitDraft(); }catch(e){}
+  try{ if(currentVisitFountainId && typeof stashFountainDraft === 'function') stashFountainDraft(); }catch(e){}
+  const photos = {};
+  Object.entries(vipControllers()).forEach(([k, c])=>{ try{ const a = c && c.getAll(); if(a && a.length) photos[k] = a.slice(); }catch(e){} });
+  const rec = {date: todayDateStr(), user: currentUser ? String(currentUser.id) : '', customerId: currentVisitCustomerId,
+    draft: visitDraft, section: currentVisibleSection, step: currentVisitStep, fountainId: currentVisitFountainId,
+    fountainDrafts: fountainDraftValues || {}, photos, savedAt: Date.now()};
+  const sig = JSON.stringify([rec.customerId, rec.draft && rec.draft.values, rec.section, rec.step, rec.fountainId,
+    Object.keys(photos).map(k => k + ':' + photos[k].map(x => String(x).length + String(x).slice(-24)).join(',')),
+    Object.keys(rec.fountainDrafts).map(k => k + ':' + JSON.stringify(rec.fountainDrafts[k]).length)]);
+  if(sig === vipLastSig) return;
+  vipLastSig = sig;
+  try{ await vipDo('readwrite', st => st.put(rec, VIP_KEY)); }catch(e){}
+}
+function forgetVisitInProgress(){
+  vipLastSig = '';
+  try{ vipDo('readwrite', st => st.delete(VIP_KEY)).catch(()=>{}); }catch(e){}
+}
+// Kept as it changes: every couple of seconds while a report is open, and the
+// moment the app is put away or the screen goes off
+setInterval(()=>{ if(currentVisitCustomerId && currentViewName === 'visit') saveVisitInProgress(); }, 2000);
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveVisitInProgress(); });
+window.addEventListener('pagehide', ()=>{ saveVisitInProgress(); });
+document.addEventListener('change', e=>{
+  if(!currentVisitCustomerId) return;
+  const v = document.getElementById('view-visit');
+  if(v && e.target && v.contains(e.target)){ clearTimeout(vipTimer); vipTimer = setTimeout(saveVisitInProgress, 600); }
+}, true);
+// Opening again the same day: straight back into the report, as it was
+async function restoreVisitInProgress(){
+  let rec = null;
+  try{ rec = await vipDo('readonly', st => st.get(VIP_KEY)); }catch(e){ return false; }
+  if(!rec || !rec.customerId) return false;
+  const who = currentUser ? String(currentUser.id) : '';
+  const c = customers.find(x => x && x.id === rec.customerId);
+  if(rec.date !== todayDateStr() || (rec.user && rec.user !== who) || !c){ forgetVisitInProgress(); return false; }
+  const hasPhotos = Object.keys(rec.photos || {}).length > 0;
+  const vals = (rec.draft && rec.draft.values) || {};
+  const typed = Object.keys(vals).some(k => vals[k] !== '' && vals[k] !== false && vals[k] !== null);
+  if(!hasPhotos && !typed && !(pendingVisit && pendingVisit.customerId === rec.customerId)){ forgetVisitInProgress(); return false; }
+  vipRestoring = true;
+  try{
+    try{ selectedHomeDay = DAYS_OF_WEEK[new Date().getDay()]; weekOffset = 0; }catch(e){}
+    await openVisit(rec.customerId);
+    await new Promise(r => setTimeout(r, 250));
+    if(currentVisitCustomerId !== rec.customerId) return false;
+    fountainDraftValues = rec.fountainDrafts || {};
+    if(rec.section){ try{ showVisitSection(rec.section); }catch(e){} }
+    visitDraft = Object.assign({}, rec.draft || {}, {customerId: rec.customerId});
+    try{ restoreVisitDraft(rec.customerId); }catch(e){}
+    const ctl = vipControllers();
+    Object.keys(rec.photos || {}).forEach(k=>{
+      // A fountain's photos belong to the fountain they were taken at
+      if((k === 'fountain' || k === 'fountainBefore') && rec.fountainId && currentVisitFountainId !== rec.fountainId) return;
+      try{ if(ctl[k]) ctl[k].setAll(rec.photos[k]); }catch(e){}
+    });
+    if(rec.step){ try{ goToVisitStep(rec.step); }catch(e){} }
+    showToast('Your report for ' + (c.name || 'this customer') + ' was kept — carry on where you left off');
+    return true;
+  }finally{
+    vipRestoring = false;
+    vipLastSig = '';
+  }
+}
+
 // Was a report still open when the technician switched tabs? If so, coming
 // back to Today reopens it. If they had already returned to the route, Today
 // shows the route — which is what it should have done all along.
@@ -17293,7 +18719,7 @@ async function discardVisitInProgress(){
     const b = beforeControllerFor(t);
     if(b) b.clear();
   });
-  visitDraft = {customerId: null, values: {}, section: null, step: 1};
+  visitDraft = {customerId: null, values: {}, section: null, step: 1}; forgetVisitInProgress();
   visitLeftOpenFor = null;
   fountainDraftValues = {};
   visitStepBySection = {};
@@ -17428,9 +18854,13 @@ function rememberPlace(){
 async function restorePlace(p){
   navigatingBack = true;
   try{
+    const leaving = currentViewName;
     switchView(p.view, {skipRefresh: true});
+    // Back within Today (or out of a report) keeps the day; Back from another
+    // tab lands on today, like pressing the Today tab (Oct 15)
     if(p.view === 'home' && p.homeDay){
-      selectedHomeDay = p.homeDay; weekOffset = p.weekOffset || 0;
+      if(leaving === 'home' || leaving === 'visit'){ selectedHomeDay = p.homeDay; weekOffset = p.weekOffset || 0; }
+      else { selectedHomeDay = DAYS_OF_WEEK[new Date().getDay()]; weekOffset = 0; }
       try{ renderHomeList(); }catch(e){}
     }
     if(p.view === 'customers'){
@@ -17552,7 +18982,7 @@ window.addEventListener('popstate', async ()=>{
       }
       await discardVisitInProgress();
     }
-    visitDraft = {customerId: null, values: {}, section: null, step: 1};
+    visitDraft = {customerId: null, values: {}, section: null, step: 1}; forgetVisitInProgress();
   visitLeftOpenFor = null;
     switchView('home');
     return;
@@ -18490,7 +19920,7 @@ async function finalizeVisitSend(){
   await commitVisitPackage(customerId);
 
   pendingVisit = null;
-  visitDraft = {customerId: null, values: {}, section: null, step: 1};
+  visitDraft = {customerId: null, values: {}, section: null, step: 1}; forgetVisitInProgress();
   visitLeftOpenFor = null;
 
   const elapsedMs = stopVisitTimer();
@@ -18537,7 +19967,7 @@ async function finalizeVisitSend(){
   currentVisitStep = 1;
   visitStepBySection = {};
   fountainDraftValues = {};
-  visitDraft = {customerId: null, values: {}, section: null, step: 1};
+  visitDraft = {customerId: null, values: {}, section: null, step: 1}; forgetVisitInProgress();
   visitLeftOpenFor = null;
 
   const who = customer ? customer.name : 'Customer';
@@ -19909,6 +21339,23 @@ async function sendReportFromOffice(customerId, type){
   }
 }
 
+// ---- Emails that didn't go out, for the office's Alerts → Emails (Oct 8) ----
+// Kept with the company setup and sent with the next sync. What arrives from
+// the office is added to what's here, never swapped for it.
+function recordEmailFailure(customerId, customerName, what, to, reason){
+  try{
+    const all = Object.assign({}, lsGet('emailFailures') || {});
+    const id = 'emailfail:' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    all[id] = {t: Date.now(), customerId: customerId || '', name: customerName || '', to: to || '',
+      what: what || 'Email', reason: reason || '', by: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || ''};
+    const cut = Date.now() - 40 * 86400000;
+    Object.keys(all).forEach(k => { if(!(all[k] && all[k].t > cut)) delete all[k]; });
+    lsSet('emailFailures', all);
+    queueSetupSend('emailFailures');
+    try{ clearTimeout(syncTimer); syncTimer = setTimeout(()=> fieldSync(), 2000); }catch(e){}
+  }catch(e){}
+}
+
 // ---- Service report emails held for signal (Oct 3) ----
 // Like work order and filter clean emails: a report that couldn't go waits on
 // this phone — its layout, who it's to, and its photos (kept in the photo
@@ -19971,6 +21418,8 @@ async function sendHeldReportEmails(){
         } else {
           let why = '';
           try{ const body = await res.json(); why = body && body.error ? ': ' + body.error : ''; }catch(e){}
+          recordEmailFailure(item.customerId, item.subject.split(' \u2014 ')[1], 'Service report', item.to,
+            why ? why.slice(2) : 'The email service refused it (' + res.status + ')');
           showToast('A held report for ' + item.subject.split(' \u2014 ')[1] + ' could not be sent' + why + '. Resend it from the Report tab.');
         }
       } else break;                             // the office is having trouble: later
@@ -20117,12 +21566,19 @@ async function adminVersion_attemptAutoSend(customerId, type, manual){
     // fall through to the manual fallbacks below if sending failed
   }
 
+  // Not sent at all: on the office's Alerts → Emails (Oct 8)
+  recordEmailFailure(customerId, custName, 'Service report', email, officeSaid);
+
   // An automatic send that failed stops here. The report is saved; the tech can
   // resend deliberately rather than being dropped into a share sheet.
   if(!manual){
     showToast('Saved \u2014 the email didn\'t go out. Resend it from the Report tab.');
     return;
   }
+  // Resend goes the normal way only (Tyrus, Oct 14): never a share sheet or an
+  // email draft. It says why it didn't go, and it's on the office's Alerts.
+  showToast('The report didn\u2019t go out \u2014 ' + officeSaid + '. Try Resend again in a moment.');
+  return;
 
   // Prefer native share (can actually attach the photo as a real file)
   if(photo && navigator.share){
@@ -20231,12 +21687,19 @@ async function techVersion_attemptAutoSend(customerId, type, manual){
     // fall through to the manual fallbacks below if sending failed
   }
 
+  // Not sent at all: on the office's Alerts → Emails (Oct 8)
+  recordEmailFailure(customerId, custName, 'Service report', email, officeSaid);
+
   // An automatic send that failed stops here. The report is saved; the tech can
   // resend deliberately rather than being dropped into a share sheet.
   if(!manual){
     showToast('Saved \u2014 the email didn\'t go out. Resend it from the Report tab.');
     return;
   }
+  // Resend goes the normal way only (Tyrus, Oct 14): never a share sheet or an
+  // email draft. It says why it didn't go, and it's on the office's Alerts.
+  showToast('The report didn\u2019t go out \u2014 ' + officeSaid + '. Try Resend again in a moment.');
+  return;
 
   // Prefer native share (can actually attach the photo as a real file)
   if(photo && navigator.share){
@@ -20440,6 +21903,7 @@ function attachAdminLoginHandlers(){
     if(isAdminUser()) adminStartOnOwnRoute();
     // Whoever signs in lands on Today, on today's list
     try{ openOnToday(); }catch(e){}
+    setTimeout(()=>{ try{ restoreVisitInProgress(); }catch(e){} }, 300);
     watchAdminAccount();
     startFieldSync();
   }
@@ -20458,8 +21922,10 @@ function guardAdminSession(){
     hideLogin();
     applyRoleUI();
     if(isAdminUser()) adminStartOnOwnRoute();
-    // Whoever signs in lands on Today, on today's list
-    try{ openOnToday(); }catch(e){}
+    // Already signed in: the page it was on before the phone closed it (Oct 12)
+    try{ openWhereLeft(); }catch(e){ try{ openOnToday(); }catch(e2){} }
+    // A report the phone closed the app on, brought back (Oct 14)
+    setTimeout(()=>{ try{ restoreVisitInProgress(); }catch(e){} }, 300);
     watchAdminAccount();
     startFieldSync();
   } else {
@@ -20928,14 +22394,34 @@ function busyForOpenOnToday(){
   let who = null; try{ who = currentUser; }catch(e){}
   return !who;
 }
-document.addEventListener('visibilitychange', ()=>{
-  if(document.hidden || busyForOpenOnToday()) return;
-  // A report left open for another tab: back into the report, not the list
-  if(reportLeftOpen()){
-    try{ openVisit(visitLeftOpenFor); return; }catch(e){}
-  }
-  openOnToday();
-});
+// Oct 12: coming back to the app (from another app or the home screen) stays
+// on the page it was on; it used to jump to Today. Where it was is also kept,
+// so if the phone closed the app in the background it opens there again.
+function rememberLastPage(){
+  try{
+    if(busyForOpenOnToday() && currentViewName !== 'visit') return;
+    localStorage.setItem('weir:lastPage', JSON.stringify({view: currentViewName,
+      day: selectedHomeDay, weekOffset: weekOffset, date: todayDateStr()}));
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) rememberLastPage(); });
+window.addEventListener('pagehide', rememberLastPage);
+// On opening again the same day: the page it was on. A report in progress is
+// brought back as well (restoreVisitInProgress, Oct 14).
+function openWhereLeft(){
+  // Oct 15: swiped away and opened again → Today, on today's list. Left
+  // running in the background (another app, the home screen) → the page it
+  // was on, as set on Oct 12. When the phone itself closes a background app to
+  // free memory, the browser reports it (document.wasDiscarded), so that still
+  // counts as left running and opens on the page it was on.
+  let last = null;
+  try{ last = JSON.parse(localStorage.getItem('weir:lastPage') || 'null'); }catch(e){}
+  const pages = ['home', 'serviced', 'technicians', 'customers', 'report', 'options'];
+  const putAway = !!document.wasDiscarded;
+  if(!putAway || !last || last.date !== todayDateStr() || pages.indexOf(last.view) === -1
+     || last.view === 'home' || (last.view === 'technicians' && !isAdminUser())){ openOnToday(); return; }
+  switchView(last.view);
+}
 // A report was open when another tab was pressed, and hasn't been finished,
 // cancelled, or left for the route since
 function reportLeftOpen(){
@@ -21902,6 +23388,19 @@ function placeVisitNotes(){
 // Give it an element whose text may be cut off (overflow hidden, one line):
 // if it is, the text slides left to show the rest, pauses, and starts over.
 // Text that fits stays still.
+// A customer's name line on Today (Oct 15): the name takes all the room it can,
+// and slides to show the rest when it's too long; JUST TODAY sits at the far
+// right of the line, beside On my way, so the name never shifts and the tag is
+// never cut off. (The old FILTER CLEAN tag is gone: a filter clean is its own row.)
+function custNameLineHtml(c, justToday){
+  const name = String(c.name || '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  // Started once the row is on screen, so the name can be measured
+  setTimeout(()=>{ document.querySelectorAll('.cust-name-text:not([data-mq])').forEach(el=>{ el.dataset.mq = '1'; try{ marqueeIfCut(el); }catch(e){} }); }, 0);
+  return '<div class="cust-name" style="display:flex;align-items:center;gap:8px;min-width:0;">'
+    + '<span class="cust-name-text" style="flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap;">' + name + '</span>'
+    + (justToday ? '<span style="flex:0 0 auto;background:var(--gold);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap;">JUST TODAY</span>' : '')
+    + '</div>';
+}
 function marqueeIfCut(el){
   if(!el) return;
   let inner = el.querySelector(':scope > .marquee-inner');

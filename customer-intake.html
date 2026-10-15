@@ -173,6 +173,9 @@ body.sidebar-subtabs #view-workcenter > .card:has(> #workCenterTypeControl){disp
 body.sidebar-subtabs .card:has(> #techMainTabs){display:none;}
 body.sidebar-subtabs #chemConfigTypeControl{display:none !important;}
 
+/* The scrollbar's room is always kept, so a page never shifts sideways when it
+   comes or goes (Oct 15) */
+html{overflow-y:scroll;scrollbar-gutter:stable;}
 .view{display:none;}
 .view.active{display:block;}
 
@@ -690,7 +693,7 @@ input::placeholder{color:#A9BCB9;}
         <button class="history-type-btn active" data-tab="profile" type="button">Profile</button>
         <button class="history-type-btn" data-tab="equipment" type="button">Equipment</button>
         <button class="history-type-btn" data-tab="history" type="button">Service Reports</button>
-        <button class="history-type-btn" data-tab="workorders" type="button">Quotes &amp; Orders</button>
+        <button class="history-type-btn" data-tab="workorders" type="button">Jobs</button>
       </div>
     </div>
 
@@ -737,7 +740,7 @@ input::placeholder{color:#A9BCB9;}
     </div>
     <div class="card" id="workOrdersCard" style="display:none;">
       <div class="section-head">
-        <h2>Quotes &amp; work orders</h2>
+        <h2>Jobs</h2>
         <span class="section-count" id="custWorkOrderCount"></span>
       </div>
       <!-- As on Service Reports (Oct 3) -->
@@ -753,6 +756,7 @@ input::placeholder{color:#A9BCB9;}
             <option value="quote">Quotes</option>
             <option value="workorder">Work orders</option>
             <option value="clean">Filter cleans</option>
+            <option value="drain">Pool drains</option>
             <option value="task">Tasks</option>
           </select>
           <span style="flex:1;"></span>
@@ -1763,7 +1767,7 @@ input::placeholder{color:#A9BCB9;}
         <h2>Filter cleans not in a group on this computer</h2>
         <button class="btn btn-ghost" id="btnRemoveStrayCleans" type="button" style="width:auto;margin-left:auto;color:var(--rust);border-color:#EFC9BC;">Remove all</button>
       </div>
-      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">These are on technicians&rsquo; routes, but none of the filter groups here made them &mdash; left over from a group made in another browser, one since deleted, or an older date. Groups are only kept in the browser they were made in. Removing one takes it off every route at the next sync.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">These are on technicians&rsquo; routes, but none of the filter groups here made them &mdash; left over from a group made in another browser, one since deleted, or an older date. Removing one takes it off every route at the next sync.</p>
       <div id="wcFilterStrayList"></div>
     </div>
 
@@ -4999,7 +5003,7 @@ function openProductServiceModal(){
   });
 
   overlay.querySelector('#psCancel').addEventListener('click', cleanup);
-  nameEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') priceEl.focus(); });
+  nameEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); priceEl.focus(); } });
 }
 
 // Schedule an existing product or service for a customer on a date
@@ -5917,6 +5921,86 @@ function saveFilterGroups(){
     if(keep.length !== all.length) lsSet('scheduledFilterCleans', keep);
   }catch(e){}
   try{ fgSyncScheduled(); }catch(e){}
+  // Customers on their own (Oct 14): once the last one is taken off, the day's
+  // holder goes too, and with it any of its cleans still on the route
+  const empty = filterGroups.filter(g => g && g.solo && !(g.customerIds || []).length);
+  if(empty.length){
+    const gone = new Set(empty.map(g => g.id));
+    try{ lsSet('scheduledFilterCleans', (lsGet('scheduledFilterCleans') || []).filter(sc => !(sc && gone.has(sc.groupId) && sc.status !== 'done'))); }catch(e){}
+    filterGroups = filterGroups.filter(g => !gone.has(g.id));
+    lsSet('filterGroups', filterGroups);
+  }
+}
+// The day's holder for customers added on their own (Oct 14), made when first needed
+function fgSoloFor(iso){
+  let g = filterGroups.find(x => x && x.solo && x.date === iso);
+  if(!g){
+    g = {id: 'fgs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: 'Customers on their own', solo: true,
+         date: iso, technicianId: '', customerIds: [], photoRequired: true, emailCustomer: true};
+    filterGroups.push(g);
+  }
+  return g;
+}
+// Pick customers to add to a day on their own (Oct 14): search, tick, add
+function fcPickCustomersForDay(iso, after){
+  const nice = new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+  const onDay = new Set();
+  filterGroups.forEach(g => { if(g && g.date === iso) (g.customerIds || []).forEach(id => onDay.add(id)); });
+  const all = customers.filter(c => c && !c.deleted && c.active !== false && !onDay.has(c.id))
+    .slice().sort((a, b) => String(displayName(a.name)).localeCompare(String(displayName(b.name)), undefined, {sensitivity: 'base', numeric: true}));
+  if(!all.length){ showToast('Everyone is on this day already'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const box = document.createElement('div');
+  box.className = 'confirm-box';
+  box.style.cssText = 'max-width:440px;width:100%;max-height:80vh;display:flex;flex-direction:column;text-align:left;';
+  box.innerHTML = '<h3 style="font-size:15px;margin:0 0 4px;"></h3>'
+    + '<p style="font-size:12.5px;color:var(--muted);margin:0 0 8px;">Tick the customers. They go on this day on their own, not in a group.</p>'
+    + '<input type="text" data-search placeholder="Search customers" autocomplete="off" style="margin:0 0 6px;">'
+    + '<div data-list style="flex:1;overflow-y:auto;"></div>'
+    + '<div class="btn-row" style="margin-top:12px;"><button type="button" class="btn btn-primary" data-go style="flex:1;">Add to this day</button><button type="button" class="btn btn-ghost" data-cancel style="width:auto;">Cancel</button></div>';
+  box.querySelector('h3').textContent = 'Add a customer to ' + nice;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const listEl = box.querySelector('[data-list]');
+  const search = box.querySelector('[data-search]');
+  const go = box.querySelector('[data-go]');
+  const picked = new Set();
+  const upd = ()=>{ go.textContent = picked.size > 1 ? 'Add ' + picked.size + ' customers to this day' : 'Add to this day'; };
+  function drawList(){
+    const term = search.value.trim().toLowerCase();
+    listEl.innerHTML = '';
+    const shown = all.filter(c => !term || [c.name, c.address, c.phone, c.email].some(v => String(v || '').toLowerCase().indexOf(term) !== -1));
+    if(!shown.length) listEl.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:8px 2px;">Nobody matches.</div>';
+    shown.slice(0, 200).forEach(c=>{
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 2px;border-top:1px solid var(--line);font-size:13px;cursor:pointer;margin:0;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink);';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.style.cssText = 'width:auto;margin:0;';
+      cb.checked = picked.has(c.id);
+      cb.addEventListener('change', ()=>{ if(cb.checked) picked.add(c.id); else picked.delete(c.id); upd(); });
+      const nm = document.createElement('b'); nm.textContent = displayName(c.name);
+      nm.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      const tech = document.createElement('span');
+      tech.style.cssText = 'margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;';
+      tech.textContent = technicianNameById(c.technicianId) || 'No technician';
+      row.appendChild(cb); row.appendChild(nm); row.appendChild(tech);
+      listEl.appendChild(row);
+    });
+    upd();
+  }
+  search.addEventListener('input', drawList);
+  drawList();
+  setTimeout(()=> search.focus(), 0);
+  box.querySelector('[data-cancel]').addEventListener('click', ()=> overlay.remove());
+  go.addEventListener('click', ()=>{
+    if(!picked.size){ showToast('Tick a customer first'); return; }
+    overlay.remove();
+    const g = fgSoloFor(iso);
+    picked.forEach(id => { if((g.customerIds || []).indexOf(id) === -1) g.customerIds.push(id); });
+    if(after) after();
+    showToast(picked.size === 1 ? 'Added to ' + nice : picked.size + ' customers added to ' + nice);
+  });
 }
 
 let openFilterGroupIds = new Set();
@@ -7513,7 +7597,7 @@ document.getElementById('btnFilterReplacements').addEventListener('click', openF
 // how many customers they hold between them, each counted once (Oct 3)
 function fgShownGroups(){
   const tech = (document.getElementById('filterGroupTech') || {}).value || '';
-  return filterGroups.filter(g => !tech ? true : tech === 'none' ? !g.technicianId : String(g.technicianId) === String(tech));
+  return filterGroups.filter(g => !g.solo && (!tech ? true : tech === 'none' ? !g.technicianId : String(g.technicianId) === String(tech)));
 }
 function fgCountText(groups){
   const people = new Set();
@@ -7562,7 +7646,14 @@ function fgChipState(g, cid){
 // Photo required is on to start for every customer (Tyrus, Oct 13); the
 // group's own tick on the Groups tab sets all of its customers at once
 function fgCustPhoto(g, cid){ return (g && g.custPhoto && typeof g.custPhoto[cid] === 'boolean') ? g.custPhoto[cid] : true; }
-function fgCustTech(g, cid){ return (g && g.custTech && g.custTech[cid]) || (g ? g.technicianId : '') || ''; }
+function fgCustTech(g, cid){
+  const own = g && g.custTech && g.custTech[cid];
+  if(own) return own;
+  if(g && g.technicianId) return g.technicianId;
+  // On their own (Oct 14): their own technician
+  if(g && g.solo){ const c = customers.find(x => x && x.id === cid); return (c && c.technicianId) || ''; }
+  return '';
+}
 function fgCustExtra(g, cid){
   const list = (g && g.custExtra && Array.isArray(g.custExtra[cid])) ? g.custExtra[cid] : [];
   return list.filter(li => li && String(li.description || '').trim());
@@ -7717,7 +7808,8 @@ function renderFilterGroups(){
     techMenu.value = Array.from(techMenu.options).some(o => o.value === keep) ? keep : '';
     showTech = techMenu.value;
   }
-  const shownGroup = g => !showTech || (showTech === 'none' ? !g.technicianId : String(g.technicianId || '') === showTech);
+  // Customers added to a day on their own (Oct 14) aren't a group to list here
+  const shownGroup = g => !g.solo && (!showTech || (showTech === 'none' ? !g.technicianId : String(g.technicianId || '') === showTech));
   if(!filterGroups.some(shownGroup)){
     const who = techMenu ? techMenu.options[techMenu.selectedIndex].textContent : '';
     container.insertAdjacentHTML('beforeend', emptyState(showTech === 'none' ? 'Every group has a technician.' : 'No groups for ' + who + '.'));
@@ -9884,6 +9976,23 @@ function calHeadToPageStyle(head){
   });
   head.querySelectorAll('select').forEach(sel=>{ sel.style.padding = ''; sel.style.fontSize = ''; sel.style.fontWeight = ''; sel.style.minWidth = '160px'; });
   head.querySelectorAll('span').forEach(sp=>{ if(/Tap the days/.test(sp.textContent || '')) sp.style.fontSize = '13px'; });
+  // The month, its arrows and the calendar icon in the middle; the technician
+  // menu (and Replacements) at the far right (Oct 13)
+  const h2b = head.querySelector('h2'), nav = h2b && h2b.nextElementSibling;
+  if(nav && nav.tagName === 'DIV'){
+    const tools = document.createElement('div');
+    tools.style.cssText = 'display:flex;align-items:center;gap:8px;justify-self:end;';
+    Array.from(nav.children).forEach(el=>{ if(el.tagName === 'SELECT' || /^Replacements/.test((el.textContent || '').trim())) tools.appendChild(el); });
+    tools.querySelectorAll('select').forEach(sel => { sel.style.marginLeft = '0'; });
+    nav.style.marginLeft = '0';
+    nav.style.justifySelf = 'center';
+    nav.after(tools);
+    head.style.display = 'grid';
+    head.style.gridTemplateColumns = '1fr auto 1fr';
+    head.style.columnGap = '12px';
+    const row2 = tools.nextElementSibling;
+    if(row2) row2.style.gridColumn = '1 / -1';
+  }
 }
 // A day window's status badge (Oct 13), in the style of the customer's Quotes &
 // orders badges: done green, in the app gold, not sent yet blue, as on the
@@ -11571,7 +11680,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const cancel = document.getElementById('btnCancelForgot');
   if(cancel) cancel.addEventListener('click', closeForgotBox);
   const typed = document.getElementById('forgotEmail');
-  if(typed) typed.addEventListener('keydown', e=>{ if(e.key === 'Enter') sendPasswordReset(); });
+  if(typed) typed.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); sendPasswordReset(); } });
   const box = document.getElementById('forgotScreen');
   // Arriving from the emailed link: set a password before anything else
   try{ startPasswordReset(); }catch(e){}
@@ -11826,7 +11935,7 @@ function startPasswordReset(){
   screen.style.display = 'flex';
   const go = ()=> setNewPassword(recovery);
   document.getElementById('btnSetPassword').addEventListener('click', go);
-  document.getElementById('resetPassword2').addEventListener('keydown', e=>{ if(e.key === 'Enter') go(); });
+  document.getElementById('resetPassword2').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); go(); } });
   return true;
 }
 
@@ -11921,7 +12030,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const btn = document.getElementById('btnSiteLogin');
   const pass = document.getElementById('sitePassword');
   if(btn) btn.addEventListener('click', attemptSiteLogin);
-  if(pass) pass.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') attemptSiteLogin(); });
+  if(pass) pass.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); attemptSiteLogin(); } });
   guardSiteSession();
 });
 
@@ -12998,7 +13107,11 @@ const SYNC_SETUP_KEYS = ['chemConfig', 'customChemConfig', 'customBodyOrder', 'r
                          // Emails that didn't go out, from any computer or phone (Oct 8)
                          'emailFailures',
                          // After photo's defaults given once, company-wide (Oct 3)
-                         'photoDefaultsSeeded'];
+                         'photoDefaultsSeeded',
+                         // Oct 14: kept only in the browser they were typed into until
+                         // now: the filter clean, drain and mass email wording
+                         'filterCleanEmail', 'drainEmailSoon', 'drainEmailScheduled',
+                         'broadcastTemplates', 'broadcastCategories'];
 const SYNC_COMPANY_SETTINGS = ['showBeforePhotos', 'showAfterPhotos', 'showGatePhoto',
   // The "Last 3 months" readings table on the phones' visits, and its chemicals added rows
   'showRecentReadings', 'showRecentDosages',
@@ -13018,7 +13131,14 @@ const SYNC_RECORD_LISTS = [
   ['scheduledFilterCleans', 'filter_clean'],
   ['scheduledPoolDrains', 'pool_drain'],
   ['scheduledWorkOrders', 'work_order'],
-  ['rescheduledVisits', 'reschedule']
+  ['rescheduledVisits', 'reschedule'],
+  // Oct 14: kept only in the browser they were made in until now, so another
+  // computer never saw them. One record each (snippet 33), office only, so
+  // two computers' changes are kept side by side.
+  ['filterGroups', 'filter_group'],
+  ['drainCalendar', 'drain_entry'],
+  ['workOrders', 'quote'],
+  ['serviceCalls', 'service_call']
 ];
 
 // Everything on this device that belongs on the server, as {kind\u0002id: data}
@@ -13174,6 +13294,37 @@ function refreshSyncedWorkingCopy(id){
   active.addEventListener('blur', ()=> setTimeout(redraw, 0), {once: true});
 }
 
+// Another computer's change to the office's own lists (Oct 14): the page's
+// working copy takes it, and what's on screen is redrawn, once
+let syncOfficeRedrawTimer = null;
+const syncOfficeRedraw = new Set();
+function syncOfficeListArrived(kind){
+  if(kind === 'filter_group') filterGroups = lsGet('filterGroups') || [];
+  if(kind === 'quote') workOrders = lsGet('workOrders') || [];
+  if(kind === 'service_call') serviceCalls = lsGet('serviceCalls') || [];
+  syncOfficeRedraw.add(kind);
+  if(syncOfficeRedrawTimer) return;
+  syncOfficeRedrawTimer = setInterval(()=>{
+    if(document.querySelector('.confirm-overlay') || reorderInProgress) return;   // after the window in front closes
+    clearInterval(syncOfficeRedrawTimer); syncOfficeRedrawTimer = null;
+    const kinds = Array.from(syncOfficeRedraw); syncOfficeRedraw.clear();
+    try{
+      if(kinds.indexOf('filter_group') !== -1){
+        renderFilterGroups();
+        const h = document.getElementById('wcFilterCalCard'); if(h && h._refresh && h.offsetParent) h._refresh();
+      }
+      if(kinds.indexOf('drain_entry') !== -1){
+        const h = document.getElementById('wcDrainCalCard'); if(h && h._refresh && h.offsetParent) h._refresh();
+        if(typeof renderPoolDrains === 'function') renderPoolDrains();
+      }
+      if(kinds.indexOf('quote') !== -1){
+        if(typeof renderWorkOrderHistory === 'function') renderWorkOrderHistory();
+        if(typeof qoCustomerId !== 'undefined' && qoCustomerId) renderCustomerWorkOrders(qoCustomerId);
+      }
+      if(kinds.indexOf('service_call') !== -1 && typeof renderServiceCallsList === 'function') renderServiceCallsList();
+    }catch(e){}
+  }, 300);
+}
 function syncApplyRecord(kind, id, data, deleted){
   if(kind === 'technician'){
     const list = lsGet('technicians') || [];
@@ -13253,6 +13404,7 @@ function syncApplyRecord(kind, id, data, deleted){
         renderGroupList();
       }catch(e){}
     }
+
     // Equipment quick buttons from another computer: an open profile shows
     // them straight away (Oct 2), unless a window is open over it
     if(id === 'equipmentChoices'){
@@ -13277,6 +13429,12 @@ function syncApplyRecord(kind, id, data, deleted){
     else if(i === -1) list.push(Object.assign({}, data));
     else list[i] = Object.assign({}, data);
     if(!lsSet(key, list)) return false;
+    // Oct 14: filter clean groups, the drain calendar, quotes sent and service
+    // calls from another computer show here straight away (redrawn once the
+    // window in front is closed)
+    if(kind === 'filter_group' || kind === 'drain_entry' || kind === 'quote' || kind === 'service_call'){
+      try{ syncOfficeListArrived(kind); }catch(e){}
+    }
     if(kind === 'task'){
       try{ if(typeof tasks !== 'undefined') tasks = lsGet('tasks') || []; }catch(e){}
       try{ if(typeof renderTaskList === 'function') renderTaskList(); }catch(e){}
@@ -14892,7 +15050,9 @@ function filterGroupBlockers(g){
   // Everyone paused: nothing to schedule (Oct 8)
   else if(!fgLiveIds(g).length) out.push('a customer who isn\u2019t paused');
   if(!g.date) out.push('no date');
-  if(!g.technicianId) out.push('no technician');
+  // Customers on their own (Oct 14): each goes to their own technician
+  if(g.solo){ if(fgLiveIds(g).some(cid => !fgCustTech(g, cid))) out.push('a technician for everyone'); }
+  else if(!g.technicianId) out.push('no technician');
   return out;
 }
 
@@ -15053,7 +15213,7 @@ async function openFilterGroupScheduler(){
 function fcPickGroupForDay(iso, after){
   // Several at once, with a technician menu, in even columns (Oct 13)
   const nice = new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
-  const all = filterGroups.filter(g => g && g.date !== iso)
+  const all = filterGroups.filter(g => g && !g.solo && g.date !== iso)
     .slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, {sensitivity: 'base', numeric: true}));
   if(!all.length){ showToast(filterGroups.length ? 'Every group is on this day already' : 'Make a group first, on the Groups tab'); return; }
   const overlay = document.createElement('div');
@@ -15162,7 +15322,7 @@ function openFilterCalendar(startDay){
     const by = {};
     filterGroups.forEach(g=>{
       if(!g || !g.date) return;
-      if(viewTech && String(g.technicianId || '') !== String(viewTech)) return;
+      if(viewTech && (g.solo ? !fgLiveIds(g).some(cid => String(fgCustTech(g, cid)) === String(viewTech)) : String(g.technicianId || '') !== String(viewTech))) return;
       if(!fgLiveIds(g).length) return;
       (by[g.date] = by[g.date] || []).push(g);
     });
@@ -15330,7 +15490,11 @@ function openFilterCalendar(startDay){
       const n = count(gs);
       ph.children[1].textContent = n + (n === 1 ? ' customer' : ' customers');
       // Groups are put on days here now, not with a date on the group (Oct 13)
-      const addG = smallBtn('+ Add a group', 'btn-ghost', 'margin-left:auto;');
+      // One customer at a time too, not in a group (Oct 14)
+      const addC = smallBtn('+ Add a customer', 'btn-ghost', 'margin-left:auto;');
+      addC.addEventListener('click', ()=> fcPickCustomersForDay(sel, ()=>{ saveFilterGroups(); renderFilterGroups(); draw(); }));
+      ph.appendChild(addC);
+      const addG = smallBtn('+ Add a group', 'btn-ghost');
       addG.addEventListener('click', ()=> fcPickGroupForDay(sel, ()=>{ saveFilterGroups(); renderFilterGroups(); draw(); }));
       ph.appendChild(addG);
       const closeDay = smallBtn('Close');
@@ -15344,15 +15508,16 @@ function openFilterCalendar(startDay){
       // carries them to the app)
       const editGroup = (gid, fn)=>{ const it = filterGroups.find(x => x && x.id === gid); if(!it) return; fn(it); saveFilterGroups(); renderFilterGroups(); draw(); };
       if(!gs.length) panel.insertAdjacentHTML('beforeend', '<div style="font-size:12.5px;color:var(--muted);padding:6px 0;">No filter cleans on this day.</div>');
-      gs.forEach(g=>{
+      // Customers on their own after the groups (Oct 14)
+      gs.slice().sort((a, b2) => (a.solo ? 1 : 0) - (b2.solo ? 1 : 0)).forEach(g=>{
         const gh = document.createElement('div');
         gh.style.cssText = 'display:flex;align-items:center;gap:10px;margin:14px 0 2px;flex-wrap:wrap;';
         gh.innerHTML = '<b style="font-size:13.5px;"></b><span style="font-size:12px;color:var(--muted);"></span>';
-        gh.children[0].textContent = g.name || 'Untitled group';
+        gh.children[0].textContent = g.solo ? 'Customers on their own' : (g.name || 'Untitled group');
         const blockers = filterGroupBlockers(g);
-        gh.children[1].textContent = (g.technicianId ? techName(g.technicianId) : 'No technician') + ' · '
+        gh.children[1].textContent = (g.solo ? 'not in a group' : (g.technicianId ? techName(g.technicianId) : 'No technician')) + ' · '
           + (g.finalized ? 'on the route' : blockers.length ? 'needs ' + blockers.join(', ') : 'not sent yet');
-        if(g.finalized){
+        if(g.finalized && !g.solo){
           // Taken back off the route, as unticking it used to
           const off = smallBtn('Take off route', 'btn-ghost', 'margin-left:auto;padding:4px 10px;font-size:12px;color:var(--rust);border-color:#EFC9BC;');
           off.addEventListener('click', async ()=>{
@@ -15381,7 +15546,8 @@ function openFilterCalendar(startDay){
           saveFilterGroups(); renderFilterGroups(); draw();
           showToast((g.name || 'Group') + ' taken off this day');
         });
-        gh.appendChild(gBin);
+        // Each customer on their own has their own bin instead
+        if(!g.solo) gh.appendChild(gBin);
         panel.appendChild(gh);
         const done = fgCleanStatus(g);
         const listWrap = document.createElement('div');
@@ -15439,7 +15605,7 @@ function openFilterCalendar(startDay){
           const techSel = document.createElement('select');
           techSel.style.cssText = 'width:100%;padding:4px 8px;font-size:12px;';
           techSel.title = 'Which technician gets this filter clean in the app';
-          if(!g.technicianId){ const o = document.createElement('option'); o.value = ''; o.textContent = 'No technician'; techSel.appendChild(o); }
+          if(!fgCustTech(g, cid)){ const o = document.createElement('option'); o.value = ''; o.textContent = 'No technician'; techSel.appendChild(o); }
           sortedTechs.forEach(t => { const o = document.createElement('option'); o.value = String(t.id); o.textContent = t.name; techSel.appendChild(o); });
           techSel.value = String(fgCustTech(g, cid) || '');
           techSel.disabled = isDone;
@@ -15783,8 +15949,59 @@ function renderLineItems(){
     const descInput = document.createElement('input');
     descInput.value = item.description;
     descInput.placeholder = 'Description';
-    descInput.style.flex = '2';
-    descInput.setAttribute('list', 'wcProductSuggestions');
+    descInput.style.cssText = 'width:100%;min-width:0;';
+    descInput.setAttribute('autocomplete', 'weir-line-item');   // not the browser's saved entries
+    // Our own list of matches under the box (Oct 15): the browser's own list
+    // (a datalist) shows nothing on phones, so typing there suggested nothing
+    const descWrap = document.createElement('div');
+    descWrap.style.cssText = 'position:relative;flex:2;min-width:0;display:flex;';
+    const suggest = document.createElement('div');
+    suggest.style.cssText = 'display:none;position:absolute;left:0;right:0;top:100%;z-index:45;background:#fff;'
+      + 'border:1px solid var(--line);border-radius:10px;margin-top:4px;box-shadow:0 4px 14px rgba(15,46,46,0.14);'
+      + 'max-height:240px;overflow-y:auto;';
+    descWrap.appendChild(descInput);
+    descWrap.appendChild(suggest);
+    const hideSuggest = ()=>{ suggest.style.display = 'none'; suggest.innerHTML = ''; };
+    const showSuggest = ()=>{
+      const t = descInput.value.trim().toLowerCase();
+      if(!t){ hideSuggest(); return; }
+      const named = (productsServices || []).filter(p => p && p.name && String(p.name).toLowerCase().includes(t));
+      // Ones starting with what's typed first, then the rest, each A to Z
+      named.sort((a, b)=>{
+        const as = String(a.name).toLowerCase().startsWith(t) ? 0 : 1, bs = String(b.name).toLowerCase().startsWith(t) ? 0 : 1;
+        return as - bs || String(a.name).localeCompare(String(b.name));
+      });
+      const matches = named.filter(p => String(p.name) !== descInput.value).slice(0, 8);
+      suggest.innerHTML = '';
+      if(!matches.length){ hideSuggest(); return; }
+      matches.forEach(p=>{
+        const opt = document.createElement('div');
+        opt.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:13.5px;cursor:pointer;border-bottom:1px solid var(--line);';
+        const nm = document.createElement('span');
+        nm.style.cssText = 'flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        nm.textContent = p.name;
+        opt.appendChild(nm);
+        if(p.price !== undefined && p.price !== null && p.price !== ''){
+          const pr = document.createElement('span');
+          pr.style.cssText = "flex-shrink:0;font-size:12.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;";
+          pr.textContent = '$' + (Number(p.price) || 0).toFixed(2);
+          opt.appendChild(pr);
+        }
+        opt.addEventListener('mouseenter', ()=>{ opt.style.background = 'var(--teal-pale)'; });
+        opt.addEventListener('mouseleave', ()=>{ opt.style.background = ''; });
+        opt.addEventListener('mousedown', e=>{
+          e.preventDefault();
+          descInput.value = p.name;
+          descInput.dispatchEvent(new Event('input', {bubbles: true}));
+          hideSuggest();
+        });
+        suggest.appendChild(opt);
+      });
+      suggest.style.display = 'block';
+    };
+    descInput.addEventListener('focus', showSuggest);
+    descInput.addEventListener('input', showSuggest);
+    descInput.addEventListener('blur', ()=> setTimeout(hideSuggest, 150));
     descInput.addEventListener('input', ()=>{
       item.description = descInput.value;
       // Anything entered starts with a quantity of one
@@ -15845,7 +16062,7 @@ function renderLineItems(){
       recalcWorkOrderTotal();
     });
 
-    row.appendChild(descInput);
+    row.appendChild(descWrap);
     row.appendChild(qtyInput);
     row.appendChild(priceWrap);
     row.appendChild(removeBtn);
@@ -17258,7 +17475,7 @@ function renderSubmittedHistory(kind){
     } else if(!subTick && kind === 'work order' && sub.customerId && sub.sourceId){
       // A work order opens on the customer's Service reports (Oct 3)
       row.style.cursor = 'pointer';
-      row.title = 'Open this work order in the customer\u2019s Quotes & Orders';
+      row.title = 'Open this work order in the customer\u2019s Jobs';
       row.addEventListener('click', e=>{
         if(e.target.closest('button, input, a, select')) return;
         openWorkOrderReport(sub.customerId, sub.sourceId);
@@ -17351,7 +17568,7 @@ function openHistoryGroupWindow(kind, lead){
       // A work order's date opens it on the customer's Service reports (Oct 3)
       if(kind === 'work order' && m.customerId && m.sourceId){
         row.style.cursor = 'pointer';
-        row.title = 'Open this one in the customer\u2019s Quotes & Orders';
+        row.title = 'Open this one in the customer\u2019s Jobs';
         row.addEventListener('click', e=>{
           if(e.target.closest('button')) return;
           if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -17915,10 +18132,13 @@ document.getElementById('btnSendWorkOrder').addEventListener('click', async ()=>
     const quoteId = 'wo_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
     const expiresDays = type === 'Quote' ? quoteExpiresDays() : null;
     if(expiresDays) message += `\n\nThis quote expires in ${expiresDays} ${expiresDays === 1 ? 'day' : 'days'}.`;
-    const respondUrl = await registerQuoteResponse(quoteId, expiresDays);
     // This quote's number: the next one up
     const quoteNumber = nextQuoteNumber();
     lsSet('quoteCounter', quoteNumber);
+    // The breakdown kept with the code, for the email's Download quote (Oct 15)
+    const details = quoteDownloadDetails(customer, type, quoteDateText, validItems, total, notes, quoteNumber, expiresDays,
+      document.getElementById('wcQuoteName').value.trim());
+    const respondUrl = await registerQuoteResponse(quoteId, expiresDays, details);
     const emailHtml = quoteEmailHtml(customer, type, quoteDateText, validItems, total, notes, null, respondUrl, quoteNumber, expiresDays);
     const sent = await sendQuoteEmail(customer, subject, emailHtml, message);
     if(sent) sentCount++;
@@ -17970,6 +18190,10 @@ function loadQuoteEmailStyle(){
   return Object.assign({}, QUOTE_EMAIL_DEFAULTS, lsGet('quoteEmailStyle') || {});
 }
 
+function quoteLinkCanDownload(url){
+  const m = String(url || '').match(/[?&]t=([0-9a-f]+)/);
+  return !!(m && quoteCanDownload[m[1]]);
+}
 function quoteEmailHtml(customer, type, dateText, items, total, notes, styleOverride, respondUrl, quoteNumber, expiresDays){
   const style = lsGet('reportEmailStyle') || {};
   const q = styleOverride || loadQuoteEmailStyle();
@@ -18057,7 +18281,11 @@ function quoteEmailHtml(customer, type, dateText, items, total, notes, styleOver
     + (respondUrl ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 6px;width:100%;"><tr>'
         + '<td style="padding-right:6px;width:50%;"><a href="' + respondUrl + '&a=approve" style="display:block;text-align:center;padding:13px 10px;border-radius:10px;background:' + colour + ';color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;">Approve</a></td>'
         + '<td style="padding-left:6px;width:50%;"><a href="' + respondUrl + '&a=deny" style="display:block;text-align:center;padding:13px 10px;border-radius:10px;background:#ffffff;color:#B8492E;border:1.5px solid #EFC9BC;font-weight:700;font-size:15px;text-decoration:none;">Decline</a></td>'
-        + '</tr></table>' : '')
+        + '</tr></table>'
+        // Download quote (Oct 15): the breakdown as a PDF to keep
+        + (!quoteLinkCanDownload(respondUrl) ? '' : '<a href="' + respondUrl + '&a=download" style="display:block;text-align:center;margin:12px 0 6px;padding:12px 10px;border-radius:10px;'
+        + 'background:#F1F8F7;color:' + esc(colour) + ';border:1.5px solid #BFDCD8;font-weight:700;font-size:14.5px;text-decoration:none;">'
+        + '&#8615;&nbsp; Download ' + esc(String(type || 'Quote').toLowerCase()) + ' (PDF)</a>') : '')
     + (((q.closing || '').trim() || signoff) ? '<div style="font-size:14px;color:#4A5A58;padding-top:18px;border-top:1px solid #E6E9E8;white-space:pre-wrap;">'
         + esc((q.closing || '').trim())
         + ((q.closing || '').trim() && signoff ? '<br>' : '') + (signoff ? esc(signoff) : '') + '</div>' : '')
@@ -18316,21 +18544,65 @@ function quoteExpiresDays(){
   return n >= 1 && n <= 365 ? n : QUOTE_ANSWER_DAYS;
 }
 
-async function registerQuoteResponse(quoteId, expiresDays){
+// What the customer's downloaded quote (PDF) shows, kept on the server with the
+// quote's code (snippet 34) so the email's Download button works on any phone
+// or computer, for good. Read back only by someone holding the email's link.
+function quoteDownloadDetails(customer, type, dateText, items, total, notes, quoteNumber, expiresDays, quoteName){
+  const style = lsGet('reportEmailStyle') || {};
+  const q = loadQuoteEmailStyle();
+  const signoff = q.signoff !== null && q.signoff !== undefined ? q.signoff
+    : (style.signoff !== undefined ? style.signoff : 'Thank you for your business.');
+  const expiresOn = expiresDays
+    ? new Date(Date.now() + expiresDays * 86400000).toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'})
+    : '';
+  return {
+    v: 1,
+    type: type || 'Quote',
+    number: quoteNumber ? quoteNumberText(quoteNumber) : '',
+    name: quoteName || '',
+    date: dateText || '',
+    expiresOn: expiresOn,
+    customer: {name: customer.name || '', address: customer.address || ''},
+    items: (items || []).map(li => ({description: String(li.description || ''), qty: parseFloat(li.qty) || 0, price: parseFloat(li.price) || 0})),
+    total: Number(total) || 0,
+    notes: notes || '',
+    colour: style.colour || '#134E4A',
+    company: {
+      name: companyName(),
+      phone: q.showContact !== false ? (lsGet('accountPhone') || '') : '',
+      email: q.showContact !== false ? (lsGet('accountEmail') || '') : '',
+      website: q.showContact !== false ? (lsGet('businessWebsite') || '') : '',
+      license: lsGet('licenseNumber') || ''
+    },
+    signoff: signoff || ''
+  };
+}
+
+// Which codes have their breakdown on the server (so the email offers Download)
+var quoteCanDownload = {};
+async function registerQuoteResponse(quoteId, expiresDays, details){
   try{
     if(typeof siteUser === 'undefined' || !siteUser || !siteUser.companyId) return null;
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
     const token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-    const res = await sbFetch('/rest/v1/quote_responses?on_conflict=company_id,quote_id', {
+    const put = withDetails => sbFetch('/rest/v1/quote_responses?on_conflict=company_id,quote_id', {
       method: 'POST',
       headers: {'Prefer': 'resolution=merge-duplicates,return=minimal'},
       // Sent now: the customer has the quote's days (30 unless set) from this
       // sending to answer. expires_days needs snippet 20 on the server.
       body: JSON.stringify(Object.assign({company_id: siteUser.companyId, quote_id: quoteId, token: token, outcome: null, responded_at: null, created_at: new Date().toISOString()},
-        expiresDays && expiresDays !== QUOTE_ANSWER_DAYS ? {expires_days: expiresDays} : {}))
+        expiresDays && expiresDays !== QUOTE_ANSWER_DAYS ? {expires_days: expiresDays} : {},
+        // The breakdown for Download quote (needs snippet 34)
+        withDetails ? {details: details} : {}))
     });
+    let res = await put(!!details);
+    let canDownload = !!details && !!res && res.ok;
+    // A server without snippet 34 yet turns the breakdown away: the quote still
+    // goes with Approve and Decline, just without Download
+    if(details && (!res || !res.ok) && !(res && res.offline)){ res = await put(false); canDownload = false; }
     if(!res || !res.ok) return null;
+    quoteCanDownload[token] = canDownload;
     // The page on this website that asks the customer to confirm (Supabase shows
     // pages from its own addresses as plain text); it carries which server to tell
     return new URL('quote-response.html', location.href).href.split('?')[0]
@@ -18392,6 +18664,8 @@ async function takeQuoteAnswers(){
       saveWorkOrders();
       const wcPage = document.getElementById('view-workcenter');
       if(wcPage && wcPage.classList.contains('active') && workCenterMode === 'quotes') applyWorkOrderType();
+      // The answer shows in Alerts straight away (Oct 15)
+      try{ renderAlerts(); }catch(e){ try{ updateAlertsBadge(); }catch(e2){} }
     }
   }catch(e){}
 }
@@ -18523,6 +18797,15 @@ function qoEntriesFor(customerId){
           ? '<s title="Replaced">' + escapeSyncText(x) + '</s>' : escapeSyncText(x)).join(', ')
       : '';
     out.push({key: 'fc:' + f.id, kind: 'clean', f: f, tag: 'Filter clean', title: said, titleHtml: html,
+      done: f.status === 'done', date: f.status === 'done' && f.doneAt ? f.doneAt : (f.date || '') + 'T12:00:00'});
+  });
+  // Pool drains (Oct 15): each drain sent to the app, done or still to do
+  (lsGet('scheduledPoolDrains') || []).filter(f => f && f.id && String(f.customerId) === cid).forEach(f=>{
+    const label = f.bodyName ? f.bodyName + ' drain'
+      : ({spa: 'Spa drain', fountain: 'Fountain drain', extra: 'Extra body drain'}[f.bodyKind] || 'Pool drain');
+    const extra = (Array.isArray(f.lineItems) ? f.lineItems : []).map(li => li && li.description).filter(Boolean);
+    out.push({key: 'pd:' + f.id, kind: 'drain', f: f, tag: label,
+      title: f.status !== 'done' ? 'Not done yet' + (extra.length ? ' · ' + extra.join(', ') : '') : (extra.length ? extra.join(', ') : 'Done'),
       done: f.status === 'done', date: f.status === 'done' && f.doneAt ? f.doneAt : (f.date || '') + 'T12:00:00'});
   });
   // Repeating tasks the same way: their upcoming ones are one row
@@ -18672,6 +18955,14 @@ function qoBody(item, customerId){
   }
   if(item.kind === 'workorder' && item.j && item.done) return buildWorkOrderDoc(customerId, item.j);
   if(item.kind === 'clean' && item.done) return buildWorkOrderDoc(customerId, Object.assign({}, item.f, {_clean: true}));
+  if(item.kind === 'drain' && item.done) return buildWorkOrderDoc(customerId, Object.assign({}, item.f, {_drain: true, _drainLabel: item.tag}));
+  if(item.kind === 'drain'){
+    const f = item.f;
+    const doc = qoDoc(item.tag, ['Scheduled for ' + when(f.date), tech(f.technicianId) ? 'Technician: ' + tech(f.technicianId) : 'No technician yet'], true);
+    if((f.lineItems || []).length) qoSection(doc, 'Extra work', qoItems(f.lineItems));
+    if(f.notes) qoSection(doc, 'Notes', qoNotes(f.notes));
+    return doc;
+  }
   if(item.kind === 'workorder'){
     const w = item.w, j = item.j || w;
     const doc = qoDoc('Work order' + (w.number ? ' #' + quoteNumberText(w.number) : ''),
@@ -18829,6 +19120,7 @@ function qoRemove(item, customerId){
   }
   if(item.done && item.kind === 'workorder' && item.j){ removeWorkOrderVisits([item.j.id]); return; }
   if(item.done && item.kind === 'clean'){ removeFilterCleanVisits([item.f.id]); return; }
+  if(item.kind === 'drain'){ removePoolDrainVisits([item.f.id]); return; }
   if(item.kind === 'quote' || (item.kind === 'workorder' && !item.j)){
     workOrders = workOrders.filter(x => x.id !== item.w.id);
     saveWorkOrders();
@@ -18858,10 +19150,11 @@ async function qoDelete(item, customerId){
     return;
   }
   const what = item.kind === 'quote' ? 'quote' : item.kind === 'workorder' ? 'work order'
-    : item.kind === 'clean' ? 'filter clean' : 'task';
-  if(item.done && (item.kind === 'workorder' && item.j || item.kind === 'clean')){
+    : item.kind === 'clean' ? 'filter clean' : item.kind === 'drain' ? String(item.tag || 'pool drain').toLowerCase() : 'task';
+  if(item.done && (item.kind === 'workorder' && item.j || item.kind === 'clean' || item.kind === 'drain')){
     // A finished one goes everywhere, as its report's own Delete does
-    return deleteWorkOrderVisit(customerId, item.kind === 'clean' ? Object.assign({}, item.f, {_clean: true}) : item.j);
+    return deleteWorkOrderVisit(customerId, item.kind === 'clean' ? Object.assign({}, item.f, {_clean: true})
+      : item.kind === 'drain' ? Object.assign({}, item.f, {_drain: true, _drainLabel: item.tag}) : item.j);
   }
   const when = item.date ? ' from ' + fmtDate(item.date) : '';
   const ok = await confirmDialog('Delete this ' + what + when + '? It is removed from WorkCenter too, and this cannot be undone.', 'Delete');
@@ -18875,6 +19168,8 @@ async function qoDelete(item, customerId){
     lsSet('scheduledWorkOrders', (lsGet('scheduledWorkOrders') || []).filter(j => j.id !== item.j.id));
   } else if(item.kind === 'clean'){
     lsSet('scheduledFilterCleans', (lsGet('scheduledFilterCleans') || []).filter(f => f.id !== item.f.id));
+  } else if(item.kind === 'drain'){
+    removePoolDrainVisits([item.f.id]);
   } else {
     // A task for several customers loses just this one; the last one, the task
     const t = tasks.find(x => x.id === item.t.id);
@@ -18925,6 +19220,13 @@ function qoItemText(item){
     if(j.notes || w.notes) lines.push('Work order notes: ' + (j.notes || w.notes));
     if(item.j && item.j.doneAt) lines.push('Submitted ' + fmtDate(item.j.doneAt) + (item.j.doneBy ? ' by ' + (tech(item.j.doneBy) || 'a technician') : ''));
     if(item.j && item.j.doneNotes) lines.push('Technician\u2019s notes: ' + item.j.doneNotes);
+  } else if(item.kind === 'drain'){
+    const f = item.f;
+    if(f.date) lines.push('Scheduled for ' + fmtDate(f.date + 'T12:00:00'));
+    if(tech(f.technicianId)) lines.push('Technician: ' + tech(f.technicianId));
+    if((f.lineItems || []).length){ lines.push('Extra work:'); items(f.lineItems); }
+    if(f.doneAt) lines.push('Completed ' + fmtDate(f.doneAt) + (f.doneBy ? ' by ' + (tech(f.doneBy) || 'a technician') : ''));
+    if(f.doneNotes) lines.push('Technician\u2019s notes: ' + f.doneNotes);
   } else if(item.kind === 'clean'){
     const f = item.f;
     if(f.date) lines.push('Scheduled for ' + fmtDate(f.date + 'T12:00:00'));
@@ -19011,7 +19313,7 @@ function openMultiQoPicker(){
     const chosen = all.filter(x => order.includes(qoDay(x))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const addr = [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ');
     let doc = '========================================\n';
-    doc += 'QUOTES & ORDERS\n' + customer.name + '\n';
+    doc += 'JOBS\n' + customer.name + '\n';
     if(addr) doc += addr + '\n';
     doc += chosen.length + (chosen.length === 1 ? ' item' : ' items') + '\n';
     doc += 'Generated ' + new Date().toLocaleString() + '\n';
@@ -19075,10 +19377,10 @@ function renderCustomerWorkOrders(customerId){
   const kind = kindSel ? kindSel.value : '';
   const list = all.filter(x => (!qoDateFilter || qoDay(x) === qoDateFilter) && (!kind || x.kind === kind));
   if(!list.length){
-    const kindName = {quote: 'quotes', workorder: 'work orders', clean: 'filter cleans', task: 'tasks'}[kind];
+    const kindName = {quote: 'quotes', workorder: 'work orders', clean: 'filter cleans', drain: 'pool drains', task: 'tasks'}[kind];
     container.innerHTML = emptyState(qoDateFilter ? 'Nothing on that date.'
       : kindName ? 'No ' + kindName + ' for this customer yet.'
-      : 'No quotes, work orders, filter cleans or tasks for this customer yet.');
+      : 'No quotes, work orders, filter cleans, pool drains or tasks for this customer yet.');
     return;
   }
   if(qoOpenId && !list.some(x => x.key === qoOpenId)) qoOpenId = null;
@@ -19117,7 +19419,9 @@ function renderCustomerWorkOrders(customerId){
     // Each kind its own colour (Tyrus, Oct 3): quote plum, work order slate,
     // filter clean gold, task sage
     const TAG_COLOURS = {quote: ['#F1E8F3', '#6B3E78'], workorder: ['#E9EEF0', '#3E5560'],
-      clean: ['#FBF1DD', '#8A5E0B'], task: ['#E8F1E4', '#4D6B3C']};
+      clean: ['#FBF1DD', '#8A5E0B'], task: ['#E8F1E4', '#4D6B3C'],
+      // Pool drains in the app's sky blue (Oct 15)
+      drain: ['#C3DEF3', '#174C78']};
     const tc = TAG_COLOURS[item.kind === 'series' ? item.of : item.kind] || ['var(--teal-pale)', 'var(--teal-deep)'];
     const tag = document.createElement('span');
     tag.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;white-space:nowrap;"
@@ -19790,7 +20094,7 @@ function openColorPicker(item, idx, onDone){
       const v = btnValue(item.buttons[idx]);
       // Blue is the default, so it stays a plain number
       item.buttons[idx] = key === 'blue' ? v : {v, c: key};
-      saveActiveConfig();
+      markButtonsOwn(item); saveActiveConfig();
       document.body.removeChild(overlay);
       if(onDone) onDone();
     });
@@ -19898,7 +20202,7 @@ function openQuickButtonsModal(item){
         item.buttons[idx] = key === 'blue' ? parsed : {v: parsed, c: key};
         // Back into its place by number (unless the order is their own)
         const moved = sortQuickButtons(item);
-        saveActiveConfig();
+        markButtonsOwn(item); saveActiveConfig();
         if(moved) renderBody();
       });
       chip.appendChild(numInput);
@@ -19925,7 +20229,7 @@ function openQuickButtonsModal(item){
         + 'display:flex;align-items:center;justify-content:center;';
       del.addEventListener('click', ()=>{
         item.buttons.splice(idx, 1);
-        saveActiveConfig();
+        markButtonsOwn(item); saveActiveConfig();
         renderBody();
       });
       chip.appendChild(del);
@@ -19936,7 +20240,7 @@ function openQuickButtonsModal(item){
         item.buttons = reordered;
         // Their own order from now on: kept, not re-sorted by number
         item.buttonsOrdered = true;
-        saveActiveConfig();
+        markButtonsOwn(item); saveActiveConfig();
         renderBody();
       });
 
@@ -19959,7 +20263,7 @@ function openQuickButtonsModal(item){
       // In the colour chosen for this field, or for the whole body of water
       const c = newButtonColor(item);
       item.buttons.push(c === 'blue' ? 0 : {v: 0, c: c});
-      saveActiveConfig();
+      markButtonsOwn(item); saveActiveConfig();
       renderBody();
       // Ready to type straight away: the new button's number is waiting with
       // its 0 selected, so typing replaces it
@@ -19981,7 +20285,7 @@ function openQuickButtonsModal(item){
       resort.addEventListener('click', ()=>{
         delete item.buttonsOrdered;
         sortQuickButtons(item);
-        saveActiveConfig();
+        markButtonsOwn(item); saveActiveConfig();
         renderBody();
       });
       addRow.appendChild(resort);
@@ -19999,7 +20303,7 @@ function openQuickButtonsModal(item){
         if(!pick) return;
         colorAllButtons(item, pick.key);
         item.buttonColor = pick.key;          // new buttons here start in it too
-        saveActiveConfig();
+        markButtonsOwn(item); saveActiveConfig();
         renderBody();
         showToast('All ' + (item.label || 'these') + ' buttons ' + QUICK_BUTTON_COLORS[pick.key].label.toLowerCase());
       });
@@ -20295,6 +20599,52 @@ wireApplyAll('chkApplyAllDosages', 'applyPoolDosagesToAll', 'dosages', 'dosages'
 // Stored as customConfig[customerId][bodyKey] = {chemicals, dosages}.
 // Anything not set here falls back to the standard Pool/Spa/Extra lists.
 let customConfig = lsGet('customChemConfig') || {};
+
+// ---------- A customer's quick buttons follow the company's (Oct 15) ----------
+// A customer's setup is a copy of the company lists taken when it was made, so
+// buttons later removed from the company lists stayed on every customised
+// customer (Shock 2, 3, 4 and Chlorine tabs 0.25 kept turning up). Now each of
+// their readings and dosages shows the company's buttons, unless that
+// customer's buttons were changed for them (buttonsOwn). The same rule is in
+// the app (followCompanyButtons), so both show the same buttons.
+// Setups saved before this carry no mark. A set that differs from the
+// company's and that no other customer has was set for them, and is kept; a
+// set several customers share came from an old company list, and follows.
+function followCompanyButtons(setup, company, everyone, markDecision){
+  if(!setup || !company) return setup;
+  const vals = b => (Array.isArray(b) ? b : []).map(x => String(btnValue(x)));
+  const same = (a, b) => vals(a).join('|') === vals(b).join('|');
+  ['chemicals', 'dosages'].forEach(part=>{
+    (setup[part] || []).forEach(item=>{
+      if(!item || !item.key || item.buttonsOwn === true) return;
+      const theirs = (company[part] || []).find(x => x && x.key === item.key);
+      if(!theirs || !Array.isArray(theirs.buttons)) return;
+      if(item.buttonsOwn !== false && !same(item.buttons, theirs.buttons)){
+        let shared = 0;
+        Object.keys(everyone || {}).forEach(cid => Object.keys(everyone[cid] || {}).forEach(body=>{
+          const s = everyone[cid][body];
+          ((s && s[part]) || []).forEach(x=>{
+            if(x && x.key === item.key && Array.isArray(x.buttons) && same(x.buttons, item.buttons)) shared++;
+          });
+        }));
+        // Decided once; kept with the setup the next time it's saved, so it
+        // doesn't change as other customers' setups are saved
+        if(shared <= 1){ if(markDecision) item.buttonsOwn = true; return; }
+      }
+      if(markDecision) item.buttonsOwn = false;
+      item.buttons = JSON.parse(JSON.stringify(theirs.buttons));
+      if(theirs.buttonsOrdered === true) item.buttonsOrdered = true; else delete item.buttonsOrdered;
+    });
+  });
+  return setup;
+}
+function customBaseType(bodyKey){
+  return bodyKey === 'pool' ? 'pool' : (bodyKey === 'spa' ? 'spa' : 'fountain');
+}
+// Changed for this customer on Customer Customization: theirs from now on
+function markButtonsOwn(item){
+  if(item && selectedChemConfigType === 'custom') item.buttonsOwn = true;
+}
 
 // ---------- Groups of customers who share a setup ----------
 // A group holds one setup and every member follows it. Changing the group
@@ -20941,7 +21291,13 @@ document.getElementById('btnAllCustomQuickColors').addEventListener('click', asy
   const pick = await pickQuickColor('Colour for every customized customer\u2019s quick buttons', false);
   if(!pick) return;
   const lists = [];
-  const addSetup = setup => Object.keys(setup || {}).forEach(k => { if(setup[k] && lists.indexOf(setup[k]) === -1) lists.push(setup[k]); });
+  const everyone = lsGet('customChemConfig') || {};
+  const addSetup = setup => Object.keys(setup || {}).forEach(k => {
+    if(!setup[k] || lists.indexOf(setup[k]) !== -1) return;
+    // Their buttons as they show now, so the colour goes on those (Oct 15)
+    followCompanyButtons(setup[k], chemConfig[customBaseType(k)], everyone, true);
+    lists.push(setup[k]);
+  });
   Object.keys(customConfig).forEach(cid => addSetup(customConfig[cid]));
   customerGroups.forEach(g => addSetup(g.config));
   // A body of water open but not yet changed: its copy follows too
@@ -20951,6 +21307,7 @@ document.getElementById('btnAllCustomQuickColors').addEventListener('click', asy
     l.defaultButtonColor = pick.key;
     ['chemicals', 'dosages'].forEach(part => (l[part] || []).forEach(it=>{
       n += colorAllButtons(it, pick.key);
+      if(Array.isArray(it.buttons)) it.buttonsOwn = true;   // coloured for them: theirs now
       delete it.buttonColor;
     }));
   });
@@ -20980,7 +21337,7 @@ function activeConfigLists(){
     if(!customCustomerId || !customBodyKey) return null;
 
     const saved = customConfig[customCustomerId] && customConfig[customCustomerId][customBodyKey];
-    if(saved) return saved;
+    if(saved) return followCompanyButtons(saved, chemConfig[customBaseType(customBodyKey)], lsGet('customChemConfig') || {}, true);
 
     // Not customised yet — hand back a copy of the default to edit
     const slot = customCustomerId + '|' + customBodyKey;
@@ -22144,7 +22501,8 @@ document.getElementById('btnAllQuickColors').addEventListener('click', async ()=
     if(selectedChemConfigType === 'custom'){
       // This customer's own setups (bodies still on the company's follow it)
       const mine = (customCustomerId && customConfig[customCustomerId]) || {};
-      lists = Object.keys(mine).map(k => mine[k]);
+      const everyone = lsGet('customChemConfig') || {};
+      lists = Object.keys(mine).map(k => followCompanyButtons(mine[k], chemConfig[customBaseType(k)], everyone, true));
       const here = activeConfigLists();
       if(here && lists.indexOf(here) === -1) lists.push(here);
     } else {
@@ -22159,6 +22517,7 @@ document.getElementById('btnAllQuickColors').addEventListener('click', async ()=
     l.defaultButtonColor = pick.key;      // new buttons on this body of water start in it
     ['chemicals', 'dosages'].forEach(part => (l[part] || []).forEach(it=>{
       n += colorAllButtons(it, pick.key);
+      if(Array.isArray(it.buttons)) markButtonsOwn(it);   // coloured for this customer: theirs now
       delete it.buttonColor;              // the page-wide choice was just applied over them
     }));
   });
@@ -22647,7 +23006,7 @@ function promptDialog(message, placeholder, value, okLabel){
     overlay.querySelector('#promptCancel').addEventListener('click', ()=>cleanup(null));
     overlay.querySelector('#promptOk').addEventListener('click', ()=>cleanup(input.value.trim() || null));
     input.addEventListener('keydown', (e)=>{
-      if(e.key === 'Enter') cleanup(input.value.trim() || null);
+      if(e.key === 'Enter'){ e.preventDefault(); cleanup(input.value.trim() || null); }
       if(e.key === 'Escape') cleanup(null);
     });
     setTimeout(()=> input.focus(), 50);
@@ -23708,7 +24067,7 @@ function twJobsFor(techId, iso){
 function twJobColours(kind){
   return kind === 'task' ? ['#E8F1E4', '#4D6B3C']
     : kind === 'filter clean' ? ['#FBF1DD', '#8A5E0B']
-    : kind === 'pool drain' ? ['#E4F0F8', '#1F5E86']
+    : kind === 'pool drain' ? ['#C3DEF3', '#174C78']
     : ['#E9EEF0', '#3E5560'];
 }
 function twJobRow(job, withCustomer){
@@ -23753,7 +24112,7 @@ function twJobRow(job, withCustomer){
     row.title = 'Open ' + displayName(c.name) + '\u2019s pool drains';
     row.addEventListener('click', ()=> openDrainHistory(c));
   } else if(c){
-    row.title = 'Open it in ' + displayName(c.name) + '\u2019s Quotes & Orders';
+    row.title = 'Open it in ' + displayName(c.name) + '\u2019s Jobs';
     row.addEventListener('click', ()=> openJobReport(c.id, job.key));
   }
   return row;
@@ -25439,6 +25798,142 @@ async function openVisitLocationMap(customer, loc){
 }
 
 // The report for one body of water, as it has always looked
+// ---------- Resend a service report (Oct 14) ----------
+// The same email the phone sends: the report style set on the website, the
+// readings, chemicals added and service performed for each body of water, and
+// the before and after photos. Sent the normal way, through the office.
+function reportEmailRows(pairs){
+  return pairs.map((p, i)=>
+    '<tr><td style="padding:7px 10px;border-bottom:1px solid #E6E9E8;color:#4A5A58;font-size:14px;'
+    + (i === 0 ? 'border-top:1px solid #E6E9E8;' : '') + '">' + esc(p[0]) + '</td>'
+    + '<td style="padding:7px 10px;border-bottom:1px solid #E6E9E8;color:#16302E;font-size:14px;font-weight:600;text-align:right;white-space:nowrap;'
+    + (i === 0 ? 'border-top:1px solid #E6E9E8;' : '') + '">' + esc(p[1]) + '</td></tr>').join('');
+}
+function reportEmailBlock(title, pairs){
+  if(!pairs.length) return '';
+  return '<tr><td style="padding:18px 0 6px;"><div style="font-size:12px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.06em;">'
+    + esc(title) + '</div></td></tr><tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">'
+    + reportEmailRows(pairs) + '</table></td></tr>';
+}
+function reportEmailSection(customer, part){
+  const r = part.r || {};
+  const label = historyTypeLabel(customer, part.type);
+  if(part.type === 'skip' || r.skipped) return {label, skipped: true};
+  const cfgType = part.type === 'spa' ? 'spa' : (part.type === 'pool' ? 'pool' : 'fountain');
+  const readingPairs = [], productPairs = [], servicePairs = [];
+  chemListFor(cfgType).forEach(chem=>{
+    const v = r[chem.key];
+    if(v === '' || v === undefined || v === null) return;
+    readingPairs.push([chem.label, v + (chem.unit ? ' ' + chem.unit : '')]);
+  });
+  dosageListFor(cfgType).forEach(d=>{
+    const v = r[d.key];
+    if(v === '' || v === undefined || v === null || parseFloat(v) === 0) return;
+    productPairs.push([d.label, v + (d.unit ? ' ' + d.unit : '')]);
+  });
+  [['filterBackwashed', 'Filter backwashed'], ['saltCellCleaned', 'Salt cell cleaned'],
+   ['skimmerBasketEmptied', 'Skimmer basket emptied'], ['pumpBasketEmptied', 'Pump basket emptied'],
+   ['poolSkimmed', 'Pool skimmed'], ['wallsBrushed', 'Walls brushed']].forEach(([f, l]) => { if(r[f]) servicePairs.push([l, 'Yes']); });
+  return {label, readingPairs, productPairs, servicePairs};
+}
+function buildServiceReportEmailHtml(customer, whenText, sections, techName){
+  const b = loadEmailStyle();
+  const company = companyName();
+  let body = '';
+  sections.forEach(sec=>{
+    body += '<tr><td style="padding:22px 0 0;"><div style="font-size:16px;font-weight:700;color:#16302E;">' + esc(sec.label) + '</div></td></tr>';
+    if(sec.skipped){ body += '<tr><td style="padding:6px 0 0;font-size:14px;color:#B8492E;font-weight:600;">Skipped this visit</td></tr>'; return; }
+    if(b.showReadings !== false) body += reportEmailBlock('Readings', sec.readingPairs);
+    body += reportEmailBlock('Chemicals added', sec.productPairs);
+    body += reportEmailBlock('Service performed', sec.servicePairs);
+  });
+  const plain = t => '<span style="color:#4A5A58;text-decoration:none;">' + esc(t) + '</span>';
+  const contact = b.showContact !== false ? ['accountPhone', 'accountEmail', 'businessWebsite'].map(k => lsGet(k)).filter(Boolean).map(plain).join(' &nbsp;&middot;&nbsp; ') : '';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<meta name="format-detection" content="telephone=no,address=no,email=no,date=no">'
+    + '<style>a[href^="tel"],a[href^="mailto"],a[href^="http"],a[x-apple-data-detectors]{color:inherit !important;text-decoration:none !important;font-size:inherit !important;font-family:inherit !important;font-weight:inherit !important;}</style>'
+    + '</head><body style="margin:0;padding:0;background:#F4F6F5;">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F6F5;padding:24px 12px;"><tr><td align="center">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:580px;background:#FFFFFF;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;">'
+    + '<tr><td style="background:' + esc(b.colour) + ';padding:22px 26px;"><div style="font-size:19px;font-weight:700;color:#FFFFFF;">' + esc(company) + '</div></td></tr>'
+    + '<tr><td style="padding:24px 26px 0;">'
+    + (b.greeting ? '<div style="font-size:14.5px;color:#4A5A58;margin-bottom:16px;">' + esc(b.greeting) + '</div>' : '')
+    + (techName ? '<div style="font-size:12px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Technician: ' + esc(techName) + '</div>' : '')
+    + '<div style="font-size:17px;font-weight:700;color:#16302E;">' + esc(customer.name) + '</div>'
+    + (customer.address ? '<div style="font-size:13.5px;color:#6B7B79;margin-top:3px;">' + esc(customer.address) + '</div>' : '')
+    + '<div style="font-size:13.5px;color:#6B7B79;margin-top:3px;">' + esc(whenText) + '</div>'
+    + '</td></tr>'
+    + '<tr><td style="padding:0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + body + '</table></td></tr>'
+    + '<tr><td style="padding:26px;">'
+    + (b.signoff ? '<div style="font-size:14px;color:#4A5A58;padding-top:18px;border-top:1px solid #E6E9E8;">' + esc(b.signoff) + '</div>' : '')
+    + '<div style="font-size:13.5px;font-weight:600;color:#16302E;margin-top:10px;">' + esc(company) + '</div>'
+    + (contact ? '<div style="font-size:12.5px;color:#4A5A58;margin-top:4px;">' + contact + '</div>' : '')
+    + (lsGet('licenseNumber') ? '<div style="font-size:11.5px;color:#8A9997;margin-top:3px;">License ' + esc(lsGet('licenseNumber')) + '</div>' : '')
+    + '</td></tr></table></td></tr></table></body></html>';
+}
+// A photo as JPEG for the email (phones keep them as WebP, which some mail can't show)
+function reportPhotoJpeg(dataUrl){
+  return new Promise(resolve=>{
+    try{
+      if(/^data:image\/jpe?g/i.test(dataUrl)){ resolve(String(dataUrl).split(',')[1] || ''); return; }
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          const max = 1600, k = Math.min(1, max / Math.max(img.width, img.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          resolve(cv.toDataURL('image/jpeg', 0.85).split(',')[1] || '');
+        }catch(e){ resolve(String(dataUrl).split(',')[1] || ''); }
+      };
+      img.onerror = ()=> resolve(String(dataUrl).split(',')[1] || '');
+      img.src = dataUrl;
+    }catch(e){ resolve(''); }
+  });
+}
+async function resendServiceReport(customer, v){
+  const to = String(customer.email || '').trim();
+  if(!to){ showToast('This customer has no email on file'); return false; }
+  const ok = await confirmDialog('Email this report to ' + (customer.name || 'the customer') + ' at ' + to + '?', 'Resend');
+  if(!ok) return false;
+  const parts = (v.parts || []).filter(p => p && p.r);
+  const sections = parts.map(p => reportEmailSection(customer, p));
+  const first = (parts[0] || {}).r || {};
+  const when = new Date(first.date || v.date);
+  const whenText = isNaN(when) ? String(v.date || '') : when.toLocaleString(undefined, {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'});
+  const techName = technicianNameById(customer.technicianId) || '';
+  const photos = [];
+  for(const p of parts){
+    if(p.type === 'skip' || p.r.skipped) continue;
+    const body = historyTypeLabel(customer, p.type);
+    for(const [lbl, ref] of reportPhotoPairs(p.r)){
+      if(photos.length >= 12) break;
+      let data = null;
+      try{ data = await resolvePhoto(ref); }catch(e){}
+      if(!data) continue;
+      const content = await reportPhotoJpeg(data);
+      if(content) photos.push({filename: (body + '-' + lbl).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.jpg', content, caption: body + ' ' + lbl.toLowerCase()});
+    }
+  }
+  // "Pool", or "Pool & Spa" for more than one, as the phone names it
+  const label = sections.length ? sections.map(x => x.label).join(' & ') : 'Pool';
+  try{
+    const res = await sbFetch('/functions/v1/send-report', {
+      method: 'POST',
+      body: JSON.stringify({to, subject: label + ' service report — ' + customer.name,
+        html: buildServiceReportEmailHtml(customer, whenText, sections, techName), customerId: customer.id, photos})
+    });
+    if(res && res.ok){ showToast('Report sent to ' + to); return true; }
+    recordEmailFailure(customer, 'Service report', to, emailFailReason(res));
+    showToast('The report didn’t go out — ' + emailFailReason(res));
+    return false;
+  }catch(e){
+    recordEmailFailure(customer, 'Service report', to, 'No connection to the office');
+    showToast('The report didn’t go out — no connection to the office');
+    return false;
+  }
+}
+
 function buildReportDoc(customerId, name, customer, type, r, onDelete){
   const label = type === 'skip' ? 'Service' : historyTypeLabel(customer, type);
   const cfgType = type === 'spa' ? 'spa' : (type === 'pool' ? 'pool' : 'fountain');
@@ -25590,6 +26085,11 @@ function removeWorkOrderVisits(ids){
   try{ if(document.getElementById('wcSubmittedList')) renderSubmittedHistory('work order'); }catch(e){}
 }
 // A finished filter clean, gone everywhere (Oct 3)
+// Pool drains taken off (Oct 15), as filter cleans are
+function removePoolDrainVisits(ids){
+  const set = new Set(ids.map(String));
+  lsSet('scheduledPoolDrains', (lsGet('scheduledPoolDrains') || []).filter(f => !(f && set.has(String(f.id)))));
+}
 function removeFilterCleanVisits(ids){
   const set = new Set(ids.map(String));
   lsSet('scheduledFilterCleans', (lsGet('scheduledFilterCleans') || []).filter(f => !(f && set.has(String(f.id)))));
@@ -25598,13 +26098,13 @@ function removeFilterCleanVisits(ids){
 async function deleteWorkOrderVisit(customerId, j){
   const num = j.workOrderNumber ? ' #' + quoteNumberText(j.workOrderNumber) : '';
   const sure = await confirmDialog(
-    'Delete ' + (j._clean ? 'this filter clean' : 'work order' + num) + ' from ' + fmtDate((j.date || '') + 'T12:00:00') + '?\n\n'
-    + 'It is removed for good from Service reports' + (j._clean ? '' : ' and WorkCenter History') + ', on every device, and cannot be brought back.',
+    'Delete ' + (j._clean ? 'this filter clean' : j._drain ? 'this ' + String(j._drainLabel || 'pool drain').toLowerCase() : 'work order' + num) + ' from ' + fmtDate((j.date || '') + 'T12:00:00') + '?\n\n'
+    + 'It is removed for good from Jobs' + (j._clean || j._drain ? '' : ' and WorkCenter History') + ', on every device, and cannot be brought back.',
     'Delete for good');
   if(!sure) return;
-  if(j._clean) removeFilterCleanVisits([j.id]); else removeWorkOrderVisits([j.id]);
+  if(j._clean) removeFilterCleanVisits([j.id]); else if(j._drain) removePoolDrainVisits([j.id]); else removeWorkOrderVisits([j.id]);
   try{ renderCustomerWorkOrders(customerId); }catch(e){}
-  showToast(j._clean ? 'Filter clean deleted' : 'Work order deleted');
+  showToast(j._clean ? 'Filter clean deleted' : j._drain ? (j._drainLabel || 'Pool drain') + ' deleted' : 'Work order deleted');
 }
 
 function renderWorkOrderReportRow(histList, customerId, customer, name, v, repKey, redrawRep){
@@ -25688,14 +26188,14 @@ function buildWorkOrderDoc(customerId, j){
       + '<td style="color:var(--gold);border-bottom:none;">' + workOrderMoney(total) + '</td></tr>';
   }
   doc.innerHTML = '<div class="report-head"><div>'
-    + '<h3>' + (j._clean ? 'Filter clean' : 'Work order' + esc(num)) + '</h3>'
+    + '<h3>' + (j._clean ? 'Filter clean' : j._drain ? esc(j._drainLabel || 'Pool drain') : 'Work order' + esc(num)) + '</h3>'
     + '<div class="rdate">Scheduled for ' + esc(fmtDate((j.date || '') + 'T12:00:00'))
     + (j.doneAt ? ' \u00b7 Submitted ' + esc(fmtDate(j.doneAt)) + ' at '
        + esc(new Date(j.doneAt).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})) : '') + '</div>'
     + '<div class="rdate">Submitted by ' + esc(by) + '</div>'
     + (j.doneDurationMs ? '<div class="rdate">Time on the job ' + esc(jobDurationText(j.doneDurationMs)) + '</div>' : '')
     + '</div><div class="report-badge">Completed</div></div>'
-    + (items.length ? '<div class="report-sec">Line items</div><table class="report-table">' + rows + '</table>' : '')
+    + (items.length ? '<div class="report-sec">' + (j._drain ? 'Extra work' : 'Line items') + '</div><table class="report-table">' + rows + '</table>' : '')
     + (j.notes ? '<div class="report-sec">Work order notes</div><div class="report-notes">' + esc(j.notes) + '</div>' : '')
     + (j.doneNotes ? '<div class="report-sec">Technician\u2019s notes</div><div class="report-notes">' + esc(j.doneNotes) + '</div>' : '')
     + (j.donePhoto ? '<div class="report-sec">' + ((j.donePhotoMore || []).length ? 'Photos' : 'Photo') + '</div><div class="report-photos" data-wo-photo>'
@@ -25731,7 +26231,7 @@ function buildWorkOrderDoc(customerId, j){
   const delOpen = document.createElement('button');
   delOpen.className = 'btn btn-ghost';
   delOpen.type = 'button';
-  delOpen.textContent = j._clean ? 'Delete this filter clean' : 'Delete this work order';
+  delOpen.textContent = j._clean ? 'Delete this filter clean' : j._drain ? 'Delete this ' + String(j._drainLabel || 'pool drain').toLowerCase() : 'Delete this work order';
   delOpen.style.cssText = 'width:auto;color:var(--rust);border-color:#EFC0B4;';
   delOpen.addEventListener('click', ()=> deleteWorkOrderVisit(customerId, j));
   footer.appendChild(delOpen);
@@ -25872,6 +26372,22 @@ function showHistory(customerId, name){
     // A skipped visit is undone with Reservice on the phone, not deleted here
     // A skipped visit has no bin, but keeps its space so the row lines up
     if(v.parts.every(p => p.type === 'skip')) del.style.visibility = 'hidden';
+    // Resend (Oct 14): the report emailed to the customer again, the normal way
+    const resend = document.createElement('button');
+    resend.className = 'btn btn-ghost';
+    resend.type = 'button';
+    resend.textContent = 'Resend';
+    resend.title = 'Email this report to the customer again';
+    resend.style.cssText = 'width:auto;padding:4px 10px;font-size:11.5px;';
+    resend.addEventListener('click', async (e)=>{
+      e.stopPropagation();                 // not a press on the bar
+      if(resend.disabled) return;
+      resend.disabled = true; resend.textContent = 'Sending\u2026';
+      try{ await resendServiceReport(customer, v); }
+      finally{ resend.disabled = false; resend.textContent = 'Resend'; }
+    });
+    if(v.parts.every(p => p.type === 'skip')) resend.style.visibility = 'hidden';
+    right.appendChild(resend);
     right.appendChild(del);
     if(repTick){
       const lead = document.createElement('div');
@@ -27703,6 +28219,23 @@ function collectAlerts(){
     const vids = [t.doneVideo].concat(t.doneVideoMore || []).filter(Boolean);
     if(vids.length && now - tm <= ALERT_VIDEO_DAYS * 86400000) out.push(Object.assign({id: 'tkvideo:' + t.id, kind: 'video', refs: vids}, base));
   });
+  // Quotes the customer approved or declined from the email (Oct 15), on the
+  // Repairs tab. Pressing one opens it in the customer's Quotes & Orders.
+  (typeof workOrders !== 'undefined' ? workOrders : []).forEach(w=>{
+    if(!w || !w.id || !w.answeredByCustomer || !(w.approved || w.denied)) return;
+    if((w.type || 'Quote') !== 'Quote') return;
+    const c = (customers || []).find(x => x && String(x.id) === String(w.customerId));
+    if(!c || c.deleted) return;
+    const at = w.approved ? w.approvedAt : w.deniedAt;
+    const tm = new Date(at || w.createdAt || 0).getTime();
+    if(!tm || isNaN(tm) || now - tm > ALERT_NOTE_DAYS * 86400000) return;   // answered in the last 30 days
+    const what = (w.lineItems || []).map(li => li && li.description).filter(Boolean).join(', ') || w.name || '';
+    out.push({id: 'quote:' + w.id + ':' + (w.approved ? 'a' : 'd'), kind: 'repair', tagText: 'Quote',
+      customerId: c.id, name: displayName(c.name),
+      body: 'Quote' + (w.number ? ' #' + quoteNumberText(w.number) : ''), t: tm, jobKey: 'q:' + w.id, tech: '',
+      notes: (w.approved ? 'Approved' : 'Declined') + ' by the customer'
+        + (w.total ? ' — ' + qoMoney(w.total) : '') + (what ? '\n' + what : '')});
+  });
   // Emails that didn't go out (Oct 8)
   const fails = lsGet('emailFailures');
   if(fails && typeof fails === 'object') Object.keys(fails).forEach(id=>{
@@ -27902,7 +28435,7 @@ function renderAlerts(){
     if(tick){ tick.style.marginTop = '4px'; row.appendChild(tick); }
     const tag = document.createElement('span');
     tag.className = 'alert-tag ' + a.kind;
-    tag.textContent = a.kind === 'video' ? 'Video' : (a.kind === 'repair' ? 'Repair' : (a.kind === 'email' ? 'Email' : a.kind === 'reminder' ? 'Reminder' : 'Note'));
+    tag.textContent = a.tagText ? a.tagText : a.kind === 'video' ? 'Video' : (a.kind === 'repair' ? 'Repair' : (a.kind === 'email' ? 'Email' : a.kind === 'reminder' ? 'Reminder' : 'Note'));
     const body = document.createElement('div');
     body.style.cssText = 'flex:1;min-width:0;';
     const t1 = document.createElement('div');
@@ -28069,6 +28602,7 @@ function alertsNoteSave(key){
 }
 
 function switchView(view){
+  try{ if(window.releaseTabHold) window.releaseTabHold(); }catch(e){}
   // Anything being typed on a profile is kept on the way out
   try{ if(typeof saveOpenProfileEdits === 'function') saveOpenProfileEdits(); }catch(e){}
   const keep = false;
@@ -30773,7 +31307,7 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
         const cs = getComputedStyle(n);
         if(cs.position === 'fixed'){
           const r = n.getBoundingClientRect();
-          if(r.width >= Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth) - 2 && r.height >= Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight) - 2) return true;
+          if(r.width >= Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth) - 24 && r.height >= Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight) - 2) return true;
           // A window built into the page is hidden until opened, so it can't
           // be measured then: a fixed layer stacked over the page counts too
           if((parseInt(cs.zIndex, 10) || 0) >= 100) return true;
@@ -30861,7 +31395,9 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
     const vw = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth);
     const vh = Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight);
     const coversScreen = r.left <= 1 && r.top <= 1
-      && r.right >= vw - 1 && r.bottom >= vh - 1;
+      // (the page always keeps its scrollbar's room now, so a full-screen
+      // layer can stop short of the window's edge by that much)
+      && r.right >= vw - 24 && r.bottom >= vh - 1;
     return coversScreen && el.children.length > 0;
   };
   const wayOut = layer=>{
@@ -30894,6 +31430,63 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
   }, true);
 })();
 
+// Enter in a pop-up window presses its main button (Oct 15): Save, Done, Add,
+// Finalize, Send, Yes… whichever the window's solid (main) button is. Not while
+// typing in a multi-line box (Enter is a new line there), not when a suggestion
+// is highlighted (Enter picks it), and not when a button already has the focus
+// (Enter presses that one). A window whose main button deletes or removes
+// something is left alone, so Enter can never delete by accident.
+(function enterPressesMainButton(){
+  const coversScreen = el=>{
+    try{
+      const cs = getComputedStyle(el);
+      if(cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
+      const r = el.getBoundingClientRect();
+      const vw = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth);
+      const vh = Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight);
+      return r.left <= 1 && r.top <= 1 && r.right >= vw - 24 && r.bottom >= vh - 1;
+    }catch(e){ return false; }
+  };
+  // The window in front: whatever is on top in the middle of the screen,
+  // inside a full-screen layer
+  const topWindow = ()=>{
+    let n = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+    while(n && n !== document.body && n !== document.documentElement){
+      if((n.classList && n.classList.contains('confirm-overlay')) || coversScreen(n)) return n;
+      n = n.parentElement;
+    }
+    return null;
+  };
+  const shown = b => !b.disabled && b.getClientRects().length > 0 && getComputedStyle(b).visibility !== 'hidden';
+  const words = b => ((b.textContent || '').trim() || b.getAttribute('aria-label') || '').toLowerCase();
+  const risky = /^(delete|remove|clear|discard|erase|wipe)\b/;
+  const mainButton = layer=>{
+    const btns = Array.from(layer.querySelectorAll('button')).filter(shown);
+    const solid = btns.filter(b => b.classList.contains('btn-primary'));
+    let pick = solid.length ? solid[solid.length - 1] : null;
+    if(!pick){
+      for(const want of [/^(done|ok|okay|save|finalize|accept|confirm|send|add|yes|continue|apply)\b/]){
+        pick = btns.find(b => want.test(words(b))) || null;
+      }
+    }
+    if(!pick || risky.test(words(pick))) return null;
+    return pick;
+  };
+  document.addEventListener('keydown', e=>{
+    if(e.key !== 'Enter' || e.isComposing || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return;
+    const t = e.target;
+    if(t && (t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON' || t.tagName === 'A' || t.isContentEditable)) return;
+    const layer = topWindow();
+    if(!layer) return;
+    // Typing on the page behind the window doesn't count
+    if(t && t !== document.body && !layer.contains(t)) return;
+    const btn = mainButton(layer);
+    if(!btn) return;
+    e.preventDefault();
+    btn.click();
+  });
+})();
+
 // Clicking a customer field empties it, so a new name can be typed straight
 // away without backspacing over the old one. Click away without choosing or
 // typing anything and what was there comes back. Pressing something beside the
@@ -30916,7 +31509,7 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
       try{
         if(getComputedStyle(n).position === 'fixed'){
           const r = n.getBoundingClientRect();
-          if(r.width >= Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth) - 2 && r.height >= Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight) - 2) return true;
+          if(r.width >= Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth) - 24 && r.height >= Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight) - 2) return true;
         }
       }catch(e){}
       n = n.parentElement;
@@ -30987,7 +31580,7 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
       const cs = getComputedStyle(el);
       if(cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
       const r = el.getBoundingClientRect();
-      return r.width >= Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth) - 2 && r.height >= Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight) - 2 && el.children.length > 0;
+      return r.width >= Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth) - 24 && r.height >= Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight) - 2 && el.children.length > 0;
     }catch(e){ return false; }
   };
   let open = new Set();
@@ -31180,6 +31773,48 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
     } finally { ranging = false; }
     try{ const sel = window.getSelection(); if(sel) sel.removeAllRanges(); }catch(err){}
   });
+})();
+
+// ---- Tabs stay put (Oct 15) ----
+// Pressing between tabs on a page (Alerts' kinds, WorkCenter's sections,
+// Products and Services, a customer's profile tabs, and every other row of tabs)
+// used to make the page jump: a shorter tab pulled everything up, and the
+// scrollbar coming and going nudged it sideways. Now the page never gets shorter
+// while you stay on it (only the bottom can grow), and it stays scrolled where
+// it was. Going to another page starts fresh.
+(function tabsStayPut(){
+  const TABS = '.seg-control .history-type-btn, .nav-subs .nav-sub';
+  let heldView = null;
+  const release = ()=>{
+    const main = document.querySelector('main');
+    if(main) main.style.minHeight = '';
+    heldView = null;
+  };
+  window.releaseTabHold = release;
+  document.addEventListener('click', e=>{
+    const t = e.target;
+    // Only a real press: a tab pressed by the code (opening a quote from an
+    // alert, say) is often followed by a scroll to the thing it opened
+    if(!e.isTrusted || !t || !t.closest) return;
+    // Another page: no hold
+    if(t.closest('nav .tab')){ release(); return; }
+    const btn = t.closest(TABS);
+    if(!btn || btn.disabled) return;
+    // Tabs inside a pop-up window aren't on the page
+    if(btn.closest('.confirm-overlay')) return;
+    const main = document.querySelector('main');
+    const view = document.querySelector('.view.active');
+    if(!main || !view || !view.contains(btn) && !btn.closest('.nav-subs')) return;
+    if(heldView !== view){ main.style.minHeight = ''; heldView = view; }
+    const h = main.offsetHeight;
+    if((parseFloat(main.style.minHeight) || 0) < h) main.style.minHeight = h + 'px';
+    const y = window.scrollY;
+    const back = ()=>{ if(heldView === view && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); };
+    setTimeout(back, 0);
+    requestAnimationFrame(back);
+    setTimeout(back, 150);
+    setTimeout(back, 400);
+  }, true);
 })();
 </script>
 
