@@ -175,6 +175,12 @@ input,select,textarea{
   transition:border-color .15s ease, box-shadow .15s ease;
 }
 input.mono{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:18px;}
+/* An empty date box keeps its full size (Nov 2): a phone shrinks one with no date */
+input[type=date]:not([style*="opacity:0"]):not([style*="width:0"]){min-height:42px;min-width:160px;}
+@media (pointer:coarse){
+  input[type=date]:not([style*="opacity:0"]):not([style*="width:0"]){-webkit-appearance:none;appearance:none;display:block;line-height:22px;}
+  input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:22px;}
+}
 input:focus,select:focus,textarea:focus{
   outline:none;
   border-color:var(--teal-mid);
@@ -375,6 +381,10 @@ textarea{min-height:52px;resize:vertical;}
 .marquee-inner{display:inline-block;white-space:nowrap;will-change:transform;}
 .cust-name-text.marquee-on{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);}
 .marquee-on .marquee-inner{animation:weirMarquee var(--marquee-time, 6s) ease-in-out infinite;}
+/* Any cut-off text that slides (Nov 1): no dots while it moves, and a soft
+   fade at the right edge like the names on Today */
+.marquee-on{text-overflow:clip !important;}
+.mq-auto.marquee-on{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);}
 /* Technicians → Photo requirements: only its own card shows, whatever else
    redraws the list underneath (Oct 3) */
 #view-technicians.photos-mode #techListCard,
@@ -585,6 +595,13 @@ select#customerSelect{font-weight:600;}
   nav{display:none;}
   header{display:none;}
 }
+.cb-dark-row .cust-meta,.cb-dark-row .route-grip,.cb-dark-row .chev{color:rgba(255,255,255,.88) !important;}
+.cb-dark-row > div:first-child{color:rgba(255,255,255,.88);}
+/* No blinking text bar anywhere you can't type (Nov 1): date and time boxes,
+   pickers, read-only boxes and everything else hide it; boxes you type in keep it */
+*{caret-color:transparent;}
+input:not([type=date]):not([type=month]):not([type=time]):not([type=week]):not([type=datetime-local]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([readonly]),
+textarea:not([readonly]),[contenteditable="true"],[contenteditable=""]{caret-color:auto;}
 </style>
 </head>
 <body>
@@ -1048,8 +1065,9 @@ select#customerSelect{font-weight:600;}
     <!-- Customers / WorkCenter (Oct 2), the same two-button style as the Report tab -->
     <div class="card" id="custPaneCard" style="padding:10px;">
       <div class="btn-row" style="gap:6px;">
-        <button type="button" class="btn btn-primary" id="btnCustPaneList" style="flex:1;">Customers</button>
+        <!-- WorkCenter on the left (Nov 2) -->
         <button type="button" class="btn btn-ghost" id="btnCustPaneWork" style="flex:1;">WorkCenter</button>
+        <button type="button" class="btn btn-primary" id="btnCustPaneList" style="flex:1;">Customers</button>
       </div>
     </div>
     <div id="custPaneList">
@@ -1261,6 +1279,20 @@ select#customerSelect{font-weight:600;}
       <p id="fieldSyncStatus" style="font-size:12.5px;color:var(--muted);margin:10px 0 0;">Checking&hellip;</p>
       <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0;">Everything is saved on this phone first and works with no signal. It goes to the office whenever there is a connection.</p>
     </div>
+      <!-- Colour-blind mode (Nov 1): this phone only -->
+      <div class="card" id="colourBlindCard">
+        <div class="field">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
+            <h2 style="margin:0;">Color-blind mode</h2>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingColourBlind">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;">Job and status colors that stay easy to tell apart with any kind of color blindness. Just for this phone.</p>
+          <div id="colourBlindKey" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;"></div>
+        </div>
+      </div>
       <!-- Left-handed mode: this phone only -->
       <div class="card" id="leftHandedCard">
         <div class="field">
@@ -2984,6 +3016,8 @@ document.addEventListener('visibilitychange', ()=>{ if(document.hidden) closeRou
 // The tabs that come back as they were left, and for how long
 var TAB_KEEPS = ['serviced', 'technicians', 'customers', 'report', 'options'];
 var TAB_KEEP_MS = 30000;
+// The Customers tab keeps the customer that was open for a minute (Oct 30)
+var TAB_KEEP_MS_FOR = {customers: 60000};
 var tabLeftAt = {};
 var tabScrollAt = {};
 // Time away from the app counts as time away from the tab it was on (Oct 2):
@@ -2997,6 +3031,21 @@ document.addEventListener('visibilitychange', ()=>{
   // Oct 15: except the day on Today — coming back always shows today
   todayOnReturn();
 });
+// Nov 1: away from the app (home screen, another app) for 30 seconds or more
+// while on any tab but Today: coming back opens Today's list. A report in
+// progress, a form being filled in or a window that's up is left as it was.
+var AWAY_TO_TODAY_MS = 30000;
+function backToTodayAfterAway(){
+  try{
+    if(document.hidden || !tabHiddenAt) return;
+    const away = Date.now() - tabHiddenAt;
+    if(away < AWAY_TO_TODAY_MS || currentViewName === 'home' || busyForOpenOnToday()) return;
+    openOnToday();
+    window.scrollTo(0, 0);
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) backToTodayAfterAway(); });
+window.addEventListener('pageshow', e=>{ if(e.persisted) backToTodayAfterAway(); });
 // Today's list back on today whenever the app comes back to the front: from
 // another app, the home screen, the phone waking, or the browser bringing the
 // page back from its cache
@@ -3029,7 +3078,7 @@ function switchView(view, opts){
   // Back within 30 seconds: as it was left. Opening a particular report
   // (skipRefresh) still shows that report.
   const keepAsLeft = !opts.skipRefresh && TAB_KEEPS.indexOf(view) !== -1 && cameFrom !== view
-    && !!tabLeftAt[view] && (Date.now() - tabLeftAt[view]) < TAB_KEEP_MS;
+    && !!tabLeftAt[view] && (Date.now() - tabLeftAt[view]) < (TAB_KEEP_MS_FOR[view] || TAB_KEEP_MS);
   if(view !== 'home' && currentViewName === 'home') closeRouteBriefs();
 
   // Leaving an open report to another tab — remember it so Today can bring it
@@ -3076,7 +3125,7 @@ function switchView(view, opts){
     try{ renderTechRoute(); }catch(e){}
   }
   if(view === 'customers' && !keepAsLeft){
-    // A search typed before leaving doesn't stay once the 30 seconds are up
+    // A search typed before leaving doesn't stay once the minute is up
     const search = document.getElementById('adminCustomerSearch');
     if(search) search.value = '';
     adminCustomerSearchTerm = '';
@@ -3183,8 +3232,27 @@ document.addEventListener('click', (ev)=>{
     if(Date.now() - stepBarPressedAt < 500) return;
 
     // Already on this tab — do nothing. Tapping Today twice used to drop you
-    // straight into a customer's report.
-    if(t.dataset.view === currentViewName) return;
+    // straight into a customer's report. A tab with two pages switches to the
+    // other one instead (Oct 30); its words do that themselves.
+    if(t.dataset.view === currentViewName){
+      // Pressed again while open: the other page. Handled only here (Nov 2):
+      // the words used to switch it too, so a press from another tab opened
+      // the top page and then jumped straight to the second one
+      if(t.dataset.twoWords === '1') bottomTabCycle(t.dataset.view);
+      return;
+    }
+    // From another tab, a tab with two pages always opens on its top one
+    // (Oct 30): Today, Techs, Serviced, Customers. A customer left open on
+    // Customers is still there within its minute.
+    // Set before the page shows (Nov 1), not just after: it used to switch a
+    // moment later, so the page it was left on (the Calendar, say) flashed up
+    // first
+    const twoPages = t.dataset.twoWords === '1';
+    if(twoPages && t.dataset.view === 'home' && typeof acalMode !== 'undefined' && acalMode === 'calendar'){
+      acalMode = 'today';
+      const card = document.getElementById('appCalCard'); if(card) card.style.display = 'none';
+      ['homeHeaderWrap', 'homeListCard'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = ''; });
+    }
 
     // Tapping Today with a report already under way goes back into that report
     // rather than the route. Leaving mid-report to check something else and
@@ -3208,6 +3276,8 @@ document.addEventListener('click', (ev)=>{
     }catch(e){ /* fall through to the normal tab change */ }
 
     switchView(t.dataset.view);
+    // Its top page straight away, in the same moment the tab opens
+    if(twoPages) bottomTabPane(t.dataset.view, false);
   })();
 }, true);
 
@@ -3219,6 +3289,26 @@ function lsGet(key){
   }catch(e){
     return null;
   }
+}
+
+// ---------- Colour-blind mode (Nov 1) ----------
+// This device only, from Settings. Swaps the job and status colours for a set
+// that stays apart for every kind of colour blindness: gold filter cleans, sky
+// drains, blue clean & refill, grey work orders, wine tasks; blue done, orange
+// in the app, light grey not in the app.
+var CB_ON = (function(){ try{ return localStorage.getItem(STORAGE_PREFIX + 'colourBlind') === 'true'; }catch(e){ return false; } })();
+var CB_JOB = {FC: ['#FFE45C', '#3A2E00'], PD: ['#7FC4F0', '#08263D'], CR: ['#0072B2', '#FFFFFF'], WO: ['#9A9A9A', '#FFFFFF'], TK: ['#882255', '#FFFFFF']};
+var CB_STATE = {done: '#0072B2', app: '#E69F00', '': '#C8C8C8'};
+function cbKindKey(kind){ return {'task': 'TK', 'filter clean': 'FC', 'pool drain': 'PD', 'clean refill': 'CR'}[kind] || 'WO'; }
+function setColourBlind(on){
+  try{ localStorage.setItem(STORAGE_PREFIX + 'colourBlind', on ? 'true' : 'false'); }catch(e){}
+  // Every colour is set as the page draws, so it starts afresh in the new colours
+  setTimeout(()=> location.reload(), 250);
+}
+// Job rows in a dark colour get light words throughout (Nov 1)
+function cbMarkRow(row, kind){
+  if(!CB_ON || !row) return;
+  if(CB_JOB[cbKindKey(kind)][1] === '#FFFFFF') row.classList.add('cb-dark-row');
 }
 
 // Storage is capped by the browser. When it fills, setItem throws — and this
@@ -3371,22 +3461,42 @@ function isAdminUser(){
 let roleShown = null;
 // The admin app's bottom tabs say both things each holds (Oct 28): Today /
 // Calendar, Techs / Photo, Serviced / Reports, Customers / WorkCenter, split by
-// a thin line. The top word opens the first, the bottom word the second; the
-// rest of the tab opens it as it was left. A technician's tabs stay one word.
+// a thin line. From another tab it opens on the top page; pressed again it
+// switches between the two (Oct 30). A technician's tabs stay one word.
 const BOTTOM_TAB_WORDS = {home: ['Today', 'Calendar'], technicians: ['Techs', 'Photo'],
-  report: ['Serviced', 'Reports'], customers: ['Customers', 'WorkCenter']};
+  report: ['Serviced', 'Reports'], customers: ['WorkCenter', 'Customers']};   // WorkCenter first (Nov 2)
 function bottomTabPane(view, second){
   try{
     if(currentViewName !== view) return;
     if(view === 'home') showHomeTab(second ? 'calendar' : 'today');
     else if(view === 'report') setReportMode(second ? 'reports' : 'serviced');
-    else if(view === 'customers') showCustomerPane(second ? 'work' : 'list');
+    else if(view === 'customers'){
+      // WorkCenter is the top page (Nov 2), opening on Quote as its button does
+      if(!second){
+        const w = document.getElementById('custPaneWork');
+        const showing = w && w.style.display !== 'none';
+        if(!showing && !(typeof awcEdit !== 'undefined' && awcEdit)){ awcKind = 'Quote'; awcView = 'main'; awcShown = 20; }
+      }
+      showCustomerPane(second ? 'list' : 'work');
+    }
     else if(view === 'technicians'){
       const b = document.querySelector('#techMainTabs [data-techmain="' + (second ? 'photos' : 'list') + '"]');
       if(b){ viewChangedAt = 0; b.click(); }
     }
   }catch(e){}
 }
+// Pressed again while open (Oct 30): the tab switches to its other page,
+// back and forth with each press
+function bottomTabOnSecond(view){
+  try{
+    if(view === 'home') return acalMode === 'calendar';
+    if(view === 'report') return reportMode === 'reports';
+    if(view === 'customers'){ const w = document.getElementById('custPaneWork'); return !(!!w && w.style.display !== 'none' && getComputedStyle(w).display !== 'none'); }   // Customers is the second page now (Nov 2)
+    if(view === 'technicians') return document.getElementById('view-technicians').classList.contains('photos-mode');
+  }catch(e){}
+  return false;
+}
+function bottomTabCycle(view){ bottomTabPane(view, !bottomTabOnSecond(view)); }
 function bottomTabWords(admin){
   document.querySelectorAll('.bottombar .tab').forEach(t=>{
     const words = BOTTOM_TAB_WORDS[t.dataset.view];
@@ -3400,9 +3510,8 @@ function bottomTabWords(admin){
     t.innerHTML = dot + '<span data-tabword="0" style="display:block;line-height:1.2;">' + words[0] + '</span>'
       + '<span style="display:block;width:60%;margin:2px auto;border-top:1px solid #CFDCD9;"></span>'
       + '<span data-tabword="1" style="display:block;line-height:1.2;">' + words[1] + '</span>';
-    t.querySelectorAll('[data-tabword]').forEach(w=>{
-      w.addEventListener('click', ()=>{ const second = w.dataset.tabword === '1'; setTimeout(()=> bottomTabPane(t.dataset.view, second), 0); });
-    });
+    // (A press on either word is handled with the tab's own press: the top
+    // page from another tab, the other page when it's already open.)
   });
 }
 function applyRoleUI(){
@@ -9420,7 +9529,7 @@ function techRouteJobsFor(techId, iso){
   // A done one put back in the app from the website keeps its record (reopened)
   // and a fresh copy goes out in its place: only the copy is listed here.
   (lsGet('scheduledWorkOrders') || []).filter(j => j && j.date === iso && mine(j) && !j.held && !j.reopened).forEach(j=>{
-    out.push({kind: 'work order', id: j.id, key: 'work order:' + j.id, report: 'wo:' + j.id, title: j.title || 'Work order', customerId: j.customerId,
+    out.push({kind: 'work order', id: j.id, key: 'work order:' + j.id, report: 'wo:' + j.id, title: j.title || 'Work order', customerId: j.customerId, lineItems: j.lineItems || [],
       done: j.status === 'done', doneAt: j.doneAt, date: j.date, technicianId: j.technicianId, placeAfter: j.placeAfter});
   });
   (lsGet('scheduledFilterCleans') || []).filter(f => f && f.date === iso && mine(f) && !f.reopened).forEach(f=>{
@@ -9445,7 +9554,8 @@ function techRouteJobRow(job, iso, onReorder){
   const row = document.createElement('div');
   row.className = 'cust-row';
   row.style.gap = '8px';
-  row.style.background = jobKindColours(job.kind)[0];
+  row.style.background = jobKindColours(shownJobKind(job))[0];
+  cbMarkRow(row, shownJobKind(job));
   if(job.done) row.style.opacity = '0.85';
   // Its own place in the route, dragged like a stop (Oct 3)
   row.dataset.reorderKey = 'job:' + job.key;
@@ -9461,9 +9571,9 @@ function techRouteJobRow(job, iso, onReorder){
   left.style.cssText = 'min-width:0;flex:1 1 auto;';
   const name = document.createElement('div');
   name.className = 'cust-name';
-  name.style.cssText = "font-family:'Space Grotesk',sans-serif;font-weight:700;color:" + jobKindColours(job.kind)[1] + ';'
+  name.style.cssText = "font-family:'Space Grotesk',sans-serif;font-weight:700;color:" + jobKindColours(shownJobKind(job))[1] + ';'
     + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  setJobNameLine(name, job.kind, (customer ? customer.name + ' \u2013 ' : '') + job.title);
+  setJobNameLine(name, shownJobKind(job), (customer ? customer.name + ' \u2013 ' : '') + job.title);
   if(job.done){
     const tag = document.createElement('span');
     tag.style.cssText = 'background:var(--green);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;vertical-align:middle;margin-left:6px;';
@@ -10911,18 +11021,31 @@ function openReplacementsPicker(current, onDone){
 
 // Each kind's colour, as the website's Quotes & Orders tags (Oct 3):
 // work order slate, filter clean gold, task sage. [pale background, text]
+// A work order with a filter clean on it shows as a filter clean job (Nov 1):
+// gold, the filter clean icon, FC on the calendar
+function woIsFilterClean(lineItems){
+  return (lineItems || []).some(li => li && (li.filterClean === true || /filter\s*clean/i.test(String(li.description || ''))));
+}
+// A Clean & refill task (an overnight drain's second day) shows bright sky blue (Nov 1)
+function isRefillJob(t){ return !!(t && (t.refillOf || /^clean\s*&\s*refill$/i.test(String(t.title || '').trim()))); }
+function shownJobKind(job){
+  if(job && job.kind === 'task' && isRefillJob(job)) return 'clean refill';
+  return job && job.kind === 'work order' && woIsFilterClean(job.lineItems) ? 'filter clean' : (job && job.kind);
+}
 function jobKindColours(kind){
-  return kind === 'task' ? ['#E8F1E4', '#4D6B3C']
+  if(CB_ON) return CB_JOB[cbKindKey(kind)];
+  return kind === 'task' ? ['#C9EBC3', '#24601F']
+    : kind === 'clean refill' ? ['#8EC5F5', '#0D3A66']
     : kind === 'filter clean' ? ['#FBF1DD', '#8A5E0B']
     : kind === 'pool drain' ? ['#C3DEF3', '#174C78']      // sky blue (Oct 15), apart from the work order grey
     : ['#E9EEF0', '#3E5560'];
 }
 // Each kind's icon (Oct 3): work order 🛠, filter clean 🚿, task 📋
 function jobKindIcon(kind){
-  return kind === 'task' ? '\ud83d\udccb' : kind === 'filter clean' ? '\ud83d\udebf' : kind === 'pool drain' ? '' : '\ud83d\udee0';
+  return (kind === 'task' || kind === 'clean refill') ? '\ud83d\udccb' : kind === 'filter clean' ? '\ud83d\udebf' : kind === 'pool drain' ? '' : '\ud83d\udee0';
 }
 function jobKindLabel(kind){
-  return kind === 'task' ? 'Task' : kind === 'filter clean' ? 'Filter clean' : kind === 'pool drain' ? 'Pool drain' : 'Work order';
+  return kind === 'clean refill' ? 'Clean & refill' : kind === 'task' ? 'Task' : kind === 'filter clean' ? 'Filter clean' : kind === 'pool drain' ? 'Pool drain' : 'Work order';
 }
 // Which body of water a drain is for (Oct 10): its name on the route and report
 function drainTitle(rec){
@@ -11070,7 +11193,8 @@ function adminVersion_appendRouteJobRows(container, customer, jobs, dayISO, canR
     // The same padding as a stop's row, so they're the same height (Oct 3)
     row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0;'
       + 'padding:15px 4px 15px 12px;border-bottom:1px solid var(--line);cursor:pointer;'
-      + 'background:' + jobKindColours(job.kind)[0] + ';';
+      + 'background:' + jobKindColours(shownJobKind(job))[0] + ';';
+    cbMarkRow(row, shownJobKind(job));
     // The same grip as a customer, so names line up down the list
     if(canReorder){
       const handle = document.createElement('div');
@@ -11089,8 +11213,8 @@ function adminVersion_appendRouteJobRows(container, customer, jobs, dayISO, canR
     text.style.cssText = 'min-width:0;flex:1 1 auto;';
     const nameLine = document.createElement('div');
     nameLine.className = 'cust-name';
-    nameLine.style.cssText = 'color:' + jobKindColours(job.kind)[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    setJobNameLine(nameLine, job.kind, customer ? customer.name + ' \u2013 ' + job.title : job.title);
+    nameLine.style.cssText = 'color:' + jobKindColours(shownJobKind(job))[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    setJobNameLine(nameLine, shownJobKind(job), customer ? customer.name + ' \u2013 ' + job.title : job.title);
     const metaLine = document.createElement('div');
     metaLine.className = 'cust-meta';
     metaLine.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
@@ -11116,7 +11240,7 @@ function adminVersion_appendRouteJobRows(container, customer, jobs, dayISO, canR
     chev.className = 'chev';
     // The same arrow as a service row, only gold, so On my way and the arrow
     // stand in the same column down the list
-    chev.style.color = jobKindColours(job.kind)[1];
+    chev.style.color = jobKindColours(shownJobKind(job))[1];
     chev.textContent = '\u203A';
     right.appendChild(chev);
     row.appendChild(right);
@@ -11155,6 +11279,27 @@ function adminVersion_appendRouteJobRows(container, customer, jobs, dayISO, canR
       if(dogNames.length) line(dogNames.length === 1 ? '\ud83d\udc15 Dog' : '\ud83d\udc15 Dogs', dogNames.join(', '));
       line((jobKindIcon(job.kind) ? jobKindIcon(job.kind) + ' ' : '') + jobKindLabel(job.kind), job.title);
       if(job.details) line('Details', job.details);
+      // Extra work added to a filter clean or drain (Oct 30): a heading, then a
+      // line each; one too long for the window slides across to show the rest
+      const extra = (job.kind === 'filter clean' || job.kind === 'pool drain')
+        ? (job.lineItems || []).map(li => String((li && (li.description || li)) || '').trim()).filter(Boolean) : [];
+      if(extra.length){
+        const head = document.createElement('div');
+        head.innerHTML = '<strong>\ud83e\uddf0 Extra work:</strong>';
+        panel.appendChild(head);
+        extra.forEach(t=>{
+          const d = document.createElement('div');
+          d.style.cssText = 'display:flex;gap:8px;align-items:center;padding-left:6px;';
+          d.innerHTML = '<span style="flex-shrink:0;">\u2022</span>';
+          const s = document.createElement('span');
+          s.className = 'cust-name-text job-extra-item';
+          s.style.cssText = 'overflow:hidden;white-space:nowrap;min-width:0;flex:1;';
+          s.textContent = t;
+          d.appendChild(s);
+          panel.appendChild(d);
+        });
+        setTimeout(()=> panel.querySelectorAll('.job-extra-item').forEach(el=>{ try{ marqueeIfCut(el); }catch(e){} }), 0);
+      }
       // Photo and video requirements are shown on the job screen itself (Oct 3)
 
       // Laid out like a customer's (Oct 25): Reschedule, Directions and Share
@@ -11213,7 +11358,8 @@ function techVersion_appendRouteJobRows(container, customer, jobs, dayISO, canRe
     // The same padding as a stop's row, so they're the same height (Oct 3)
     row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0;'
       + 'padding:15px 4px 15px 12px;border-bottom:1px solid var(--line);cursor:pointer;'
-      + 'background:' + jobKindColours(job.kind)[0] + ';';
+      + 'background:' + jobKindColours(shownJobKind(job))[0] + ';';
+    cbMarkRow(row, shownJobKind(job));
     // The same grip as a customer, so names line up down the list
     if(canReorder){
       const handle = document.createElement('div');
@@ -11232,8 +11378,8 @@ function techVersion_appendRouteJobRows(container, customer, jobs, dayISO, canRe
     text.style.cssText = 'min-width:0;flex:1 1 auto;';
     const nameLine = document.createElement('div');
     nameLine.className = 'cust-name';
-    nameLine.style.cssText = 'color:' + jobKindColours(job.kind)[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    setJobNameLine(nameLine, job.kind, customer ? customer.name + ' \u2013 ' + job.title : job.title);
+    nameLine.style.cssText = 'color:' + jobKindColours(shownJobKind(job))[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    setJobNameLine(nameLine, shownJobKind(job), customer ? customer.name + ' \u2013 ' + job.title : job.title);
     const metaLine = document.createElement('div');
     metaLine.className = 'cust-meta';
     metaLine.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
@@ -11259,7 +11405,7 @@ function techVersion_appendRouteJobRows(container, customer, jobs, dayISO, canRe
     chev.className = 'chev';
     // The same arrow as a service row, only gold, so On my way and the arrow
     // stand in the same column down the list
-    chev.style.color = jobKindColours(job.kind)[1];
+    chev.style.color = jobKindColours(shownJobKind(job))[1];
     chev.textContent = '\u203A';
     right.appendChild(chev);
     row.appendChild(right);
@@ -11298,6 +11444,27 @@ function techVersion_appendRouteJobRows(container, customer, jobs, dayISO, canRe
       if(dogNames.length) line(dogNames.length === 1 ? '\ud83d\udc15 Dog' : '\ud83d\udc15 Dogs', dogNames.join(', '));
       line((jobKindIcon(job.kind) ? jobKindIcon(job.kind) + ' ' : '') + jobKindLabel(job.kind), job.title);
       if(job.details) line('Details', job.details);
+      // Extra work added to a filter clean or drain (Oct 30): a heading, then a
+      // line each; one too long for the window slides across to show the rest
+      const extra = (job.kind === 'filter clean' || job.kind === 'pool drain')
+        ? (job.lineItems || []).map(li => String((li && (li.description || li)) || '').trim()).filter(Boolean) : [];
+      if(extra.length){
+        const head = document.createElement('div');
+        head.innerHTML = '<strong>\ud83e\uddf0 Extra work:</strong>';
+        panel.appendChild(head);
+        extra.forEach(t=>{
+          const d = document.createElement('div');
+          d.style.cssText = 'display:flex;gap:8px;align-items:center;padding-left:6px;';
+          d.innerHTML = '<span style="flex-shrink:0;">\u2022</span>';
+          const s = document.createElement('span');
+          s.className = 'cust-name-text job-extra-item';
+          s.style.cssText = 'overflow:hidden;white-space:nowrap;min-width:0;flex:1;';
+          s.textContent = t;
+          d.appendChild(s);
+          panel.appendChild(d);
+        });
+        setTimeout(()=> panel.querySelectorAll('.job-extra-item').forEach(el=>{ try{ marqueeIfCut(el); }catch(e){} }), 0);
+      }
       // Photo and video requirements are shown on the job screen itself (Oct 3)
 
       // Laid out like a customer's (Oct 25): Directions and Share on top,
@@ -11471,6 +11638,10 @@ function jobWasSkipped(j){
 // Items to tick before Submit (Oct 20): each its own white tile with a bigger
 // box and bold words; ticked, it turns pale teal with a teal border, so what's
 // left stands out. The whole tile can be pressed.
+// Before a pool drain (Nov 1): both ticked before Submit. They travel in
+// doneExtraWork (the field the office already takes from the phones) and the
+// website shows them under their own heading.
+var DRAIN_CHECKS = ['Autofill valve turned off', 'Pump turned off'];
 function jobTickTile(line, cb){
   line.style.cssText = 'display:flex;align-items:center;gap:12px;padding:13px 14px;margin:0 0 8px;cursor:pointer;'
     + 'border:1.5px solid #BFDCD8;border-radius:12px;background:#fff;font-size:15.5px;font-weight:700;color:var(--ink);'
@@ -11532,6 +11703,7 @@ function openJobPage(customer, job){
   // A work order shows its line items and a task its name, in black, with no
   // customer name or address (Oct 3)
   const lineChecks = [];       // a work order's line items, all ticked before Submit
+  const drainChecks = [];      // a pool drain's Before draining ticks (Nov 1)
   if(job.kind === 'work order' || job.kind === 'task'){
     where.style.display = 'none';
     who.style.color = 'var(--ink)';
@@ -11556,6 +11728,29 @@ function openJobPage(customer, job){
     } else {
       who.textContent = job.title || jobKindLabel(job.kind);
     }
+  }
+  // Before draining (Nov 1): the autofill valve and the pump off, both ticked
+  // before Submit, first on the screen
+  if(job.kind === 'pool drain'){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin:2px 0 14px;';
+    const hd = document.createElement('div');
+    hd.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin:4px 0 6px;";
+    hd.textContent = 'Before draining';
+    wrap.appendChild(hd);
+    DRAIN_CHECKS.forEach(t=>{
+      const line = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.drainCheck = t;
+      jobTickTile(line, cb);
+      drainChecks.push(cb);
+      const span = document.createElement('span');
+      span.textContent = t;
+      line.appendChild(cb); line.appendChild(span);
+      wrap.appendChild(line);
+    });
+    card.appendChild(wrap);
   }
   // A pool drain's extra work from the office (Oct 13): each item with a box to
   // tick, all ticked before Submit, like a work order's items
@@ -11747,6 +11942,12 @@ function openJobPage(customer, job){
   submit.addEventListener('click', async ()=>{
     // A task marked "Photo required" can't go without one
     const shots = photos ? photos.getAll() : [];
+    // Autofill valve and pump off first (Nov 1)
+    const notOff = drainChecks.filter(cb => !cb.checked).map(cb => cb.dataset.drainCheck);
+    if(notOff.length){
+      showToast('Tick ' + notOff.map(t => '\u201c' + t + '\u201d').join(' and ') + ' first');
+      return;
+    }
     // Every line item ticked first (Oct 3)
     const unticked = lineChecks.filter(cb => !cb.checked).length;
     if(unticked){
@@ -11848,7 +12049,9 @@ function openJobPage(customer, job){
         pd.doneNotes = noteText;
         pd.doneDurationMs = durationMs;
         // Every extra work item was ticked to get here (Oct 13)
-        if(Array.isArray(pd.lineItems) && pd.lineItems.length) pd.doneExtraWork = pd.lineItems.map(li => String((li && li.description) || '').trim()).filter(Boolean);
+        const extraDone = Array.isArray(pd.lineItems) ? pd.lineItems.map(li => String((li && li.description) || '').trim()).filter(Boolean) : [];
+        // With the Before draining ticks first (Nov 1)
+        pd.doneExtraWork = DRAIN_CHECKS.concat(extraDone);
         if(isPhotoRef(stored)) pd.donePhoto = stored;
         if(storedMore.length) pd.donePhotoMore = storedMore;
         if(isPhotoRef(videoRef)) pd.doneVideo = videoRef;
@@ -13012,13 +13215,14 @@ function servicedJobRow(job){
   const row = document.createElement('div');
   row.className = 'cust-row';
   row.dataset.doneAt = job.doneAt || '';
-  row.style.background = jobKindColours(job.kind)[0];
+  row.style.background = jobKindColours(shownJobKind(job))[0];
+  cbMarkRow(row, shownJobKind(job));
   const left = document.createElement('div');
   left.style.cssText = 'min-width:0;';
   const name = document.createElement('div');
   name.className = 'cust-name';
-  name.style.cssText = 'color:' + jobKindColours(job.kind)[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  setJobNameLine(name, job.kind, (customer ? customer.name + ' \u2013 ' : '') + job.title);
+  name.style.cssText = 'color:' + jobKindColours(shownJobKind(job))[1] + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  setJobNameLine(name, shownJobKind(job), (customer ? customer.name + ' \u2013 ' : '') + job.title);
   const meta = document.createElement('div');
   meta.className = 'cust-meta';
   meta.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
@@ -14214,7 +14418,7 @@ async function renderWorkOrderReport(customerId, jobId, isClean){
   items.forEach(li=>{
     const qty = Number(li.qty) || 1, price = Number(li.price) || 0;
     total += qty * price;
-    rows += '<tr><td>' + esc(li.description) + '</td>'
+    rows += '<tr><td>' + esc(li.description) + (li.detail ? '<div style="font-size:12px;color:var(--muted);font-weight:400;margin-top:2px;">' + esc(li.detail) + '</div>' : '') + '</td>'
       + '<td style="text-align:right;color:var(--muted);font-family:\'Inter\',sans-serif;font-weight:500;white-space:nowrap;">' + qty + ' \u00d7 ' + workOrderMoney(price) + '</td>'
       + '<td style="width:90px;">' + workOrderMoney(qty * price) + '</td></tr>';
   });
@@ -16574,6 +16778,7 @@ function awcBuild(pane){
         <div id="awcQuoteLines"></div>
         <div class="btn-row" style="gap:8px;margin-top:4px;">
           <button type="button" class="btn btn-ghost" id="awcQuoteAddLine" style="width:auto;">+ Add line item</button>
+          <button type="button" class="btn btn-ghost" data-new-ps style="width:auto;">+ New product or service</button>
         </div>
       </div>
       <div class="field">
@@ -16625,6 +16830,7 @@ function awcBuild(pane){
         <div class="btn-row" style="gap:8px;margin-top:4px;">
           <button type="button" class="btn btn-ghost" id="awcAddLine" style="width:auto;">+ Add line item</button>
           <button type="button" class="btn btn-ghost" id="awcAddFilterClean" style="width:auto;">+ Filter clean</button>
+          <button type="button" class="btn btn-ghost" data-new-ps style="width:auto;">+ New product or service</button>
         </div>
       </div>
       <div class="field">
@@ -16837,6 +17043,8 @@ function awcBuild(pane){
   };
   if(fcBtn) fcBtn.addEventListener('click', ()=> awcPickFilterCleans(addFcLines));
   awcWireQuote();
+  // + New product or service (Nov 1): a blank Add line item window
+  pane.querySelectorAll('[data-new-ps]').forEach(b => b.addEventListener('click', ()=> awcProductWindow()));
   document.getElementById('awcAddLine').addEventListener('click', ()=>{
     awcLineItems.push({description: '', qty: '', price: ''});
     awcRenderLines();
@@ -16903,6 +17111,19 @@ function awcApply(){
   if(awcView === 'history') awcRenderHistory();
 }
 
+// A different sub-tab in the WorkCenter starts at the top (Oct 30): Quote /
+// Work Order / Task, Work Order / Current. The one already open stays put.
+(function awcSubtabToTop(){
+  let before = null;
+  const sig = ()=> { try{ return awcKind + '|' + awcView; }catch(e){ return ''; } };
+  const isTab = el => el && el.closest && el.closest('#awcKindRow button, #awcViewRow button');
+  document.addEventListener('click', e=>{ before = isTab(e.target) ? sig() : null; }, true);
+  document.addEventListener('click', e=>{
+    if(before === null || !isTab(e.target)) return;
+    const was = before; before = null;
+    setTimeout(()=>{ if(sig() !== was) window.scrollTo({top: 0, behavior: 'auto'}); }, 0);
+  });
+})();
 function awcApplyRepeats(){
   document.getElementById('awcWoCustom').style.display = document.getElementById('awcWoRepeat').value === 'custom' ? 'flex' : 'none';
   document.getElementById('awcWoUntilWrap').style.display = document.getElementById('awcWoRepeat').value === 'none' ? 'none' : 'block';
@@ -17018,6 +17239,103 @@ function awcTotal(){
   return total;
 }
 
+// ---------- Add a product or service from the app (Nov 1) ----------
+// The website's Add line item window: category first, then a price and a
+// description for repairs, products and services (and uncategorised), or a
+// price, a unit and Extra charge chemical (abbreviation and colour) for
+// chemicals. Saved into Products & Services and sent to the office.
+var AWC_EXTRA_COLOURS = ['#C68A17', '#6B3E78', '#1F5E86', '#3E8F5F', '#A8386A', '#B8492E', '#8A5E0B', '#3E5560'];
+function awcHasProduct(name){
+  const v = String(name || '').trim().toLowerCase();
+  return !!v && (lsGet('productsServices') || []).some(p => p && String(p.name || '').trim().toLowerCase() === v);
+}
+function awcProductWindow(opts){
+  opts = opts || {};
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const box = document.createElement('div');
+  box.className = 'confirm-box';
+  box.style.cssText = 'max-width:420px;width:100%;text-align:left;max-height:88vh;overflow-y:auto;';
+  box.innerHTML = '<h3 style="font-size:17px;margin:0 0 4px;">Add line item</h3>'
+    + '<p data-sub style="font-size:13px;color:var(--muted);margin:0 0 14px;">Pick a category, give it a name and a price, and it’s ready to drop onto any quote or work order.</p>'
+    + '<div class="field"><label>Category</label><select data-cat>'
+    + '<option value="">Uncategorized</option><option value="repairs">Repair</option><option value="products">Product</option>'
+    + '<option value="services">Service</option><option value="chemicals">Chemical</option></select></div>'
+    + '<div class="field"><label>Product or service</label><input data-name placeholder="e.g. Filter replacement"></div>'
+    + '<div class="field"><label>Price ($)</label><input data-price type="number" step="0.01" inputmode="decimal" placeholder="0.00"></div>'
+    + '<div class="field" data-for="other"><label>Description (optional)</label><textarea data-desc rows="3" placeholder="What’s included. Shows under the line on quotes and work orders."></textarea></div>'
+    + '<div class="field" data-for="chem"><label>Unit (optional)</label><input data-unit placeholder="gal, lb, oz, tab…"></div>'
+    + '<div class="field" data-for="chem"><label class="inline-check" style="margin:0;"><input type="checkbox" data-extra> Extra charge chemical</label></div>'
+    + '<div data-for="extra" style="display:none;">'
+    + '<div class="field"><label>Abbreviation</label><input data-abbr maxlength="4" placeholder="e.g. MA">'
+    + '<div style="font-size:12px;color:var(--muted);margin-top:4px;">Four characters at most. It has to fit the billing column.</div></div>'
+    + '<div class="field"><label>Color</label><div data-dots style="display:flex;gap:10px;flex-wrap:wrap;"></div></div></div>'
+    + '<div class="btn-row" style="flex-wrap:nowrap;">'
+    + '<button type="button" class="btn btn-primary" data-save style="flex:1 1 0;min-width:0;">Save</button>'
+    + '<button type="button" class="btn btn-ghost" data-cancel style="flex:1 1 0;min-width:0;">Cancel</button></div>';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const q = sel => box.querySelector(sel);
+  const cat = q('[data-cat]'), nameEl = q('[data-name]'), priceEl = q('[data-price]'), descEl = q('[data-desc]');
+  const unitEl = q('[data-unit]'), extraEl = q('[data-extra]'), abbrEl = q('[data-abbr]');
+  if(opts.name !== undefined){
+    nameEl.value = opts.name || '';
+    if(opts.price !== undefined && opts.price !== null && opts.price !== '') priceEl.value = opts.price;
+    if(opts.detail) descEl.value = String(opts.detail).trim();
+    q('[data-sub]').textContent = 'From your ' + (opts.from || 'quote') + '. Check the name and price, add anything else, and it’ll be ready for every quote and work order after this one.';
+  }
+  let colour = AWC_EXTRA_COLOURS[0];
+  const dots = q('[data-dots]');
+  const drawDots = ()=>{
+    dots.innerHTML = '';
+    AWC_EXTRA_COLOURS.forEach(c=>{
+      const d = document.createElement('button');
+      d.type = 'button';
+      d.setAttribute('aria-label', 'Color');
+      d.style.cssText = 'width:36px;height:36px;min-width:36px;padding:0;border-radius:50%;border:3px solid #fff;cursor:pointer;background:' + c + ';'
+        + 'box-shadow:0 0 0 ' + (c === colour ? '2px var(--teal-deep)' : '1px var(--line)') + ';';
+      d.addEventListener('click', ()=>{ colour = c; drawDots(); });
+      dots.appendChild(d);
+    });
+  };
+  drawDots();
+  const showFor = ()=>{
+    const chem = cat.value === 'chemicals';
+    box.querySelectorAll('[data-for="other"]').forEach(el => { el.style.display = chem ? 'none' : ''; });
+    box.querySelectorAll('[data-for="chem"]').forEach(el => { el.style.display = chem ? '' : 'none'; });
+    q('[data-for="extra"]').style.display = chem && extraEl.checked ? '' : 'none';
+  };
+  cat.addEventListener('change', showFor);
+  extraEl.addEventListener('change', showFor);
+  showFor();
+  const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  q('[data-cancel]').addEventListener('click', shut);
+  q('[data-save]').addEventListener('click', ()=>{
+    const name = nameEl.value.trim();
+    if(!name){ showToast('Give it a name first'); nameEl.focus(); return; }
+    const chem = cat.value === 'chemicals';
+    const extra = chem && extraEl.checked;
+    const abbr = abbrEl.value.trim().slice(0, 4);
+    if(extra && !abbr){ showToast('Give it an abbreviation for the billing column'); abbrEl.focus(); return; }
+    const item = {
+      key: 'ps_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: name, price: priceEl.value.trim(),
+      unit: chem ? unitEl.value.trim() : '', extraCharge: extra, category: cat.value
+    };
+    if(extra){ item.abbr = abbr; item.extraColor = colour; }
+    if(!chem && descEl.value.trim()) item.description = descEl.value.trim();
+    const list = lsGet('productsServices') || [];
+    list.push(item);
+    lsSet('productsServices', list);
+    // To the office, so the website's Products & Services has it
+    queueSetupSend('productsServices');
+    try{ fieldSync(); }catch(e){}
+    shut();
+    showToast(name + ' added');
+    if(typeof opts.onSaved === 'function'){ try{ opts.onSaved(item); }catch(e){} }
+  });
+  setTimeout(()=>{ try{ nameEl.focus(); }catch(e){} }, 50);
+}
 function awcRenderLines(boxId){
   // The work order's lines, or the quote's (Oct 15): the same rows for both
   const isQuote = boxId === 'awcQuoteLines';
@@ -17029,6 +17347,10 @@ function awcRenderLines(boxId){
   items.forEach((item, i)=>{
     const row = document.createElement('div');
     row.className = 'awc-line';
+    // The product's description, under the line (Nov 1)
+    const detailLine = document.createElement('div');
+    detailLine.style.cssText = 'display:' + (item.detail ? 'block' : 'none') + ';font-size:12.5px;color:var(--muted);margin:-2px 44px 10px 4px;white-space:pre-wrap;';
+    detailLine.textContent = item.detail || '';
     // The description with its own list of matching products underneath (Oct
     // 15): the phone's built-in list showed nothing while typing
     const descWrap = document.createElement('div');
@@ -17108,6 +17430,11 @@ function awcRenderLines(boxId){
         item.price = match.price == null ? '' : match.price;
         price.value = item.price;
       }
+      // Its description from Products & Services goes with the line (Nov 1)
+      const det = match && String(match.description || '').trim();
+      if(det) item.detail = det; else delete item.detail;
+      detailLine.textContent = item.detail || '';
+      detailLine.style.display = item.detail ? 'block' : 'none';
       total();
     });
     desc.addEventListener('input', showSug);
@@ -17123,6 +17450,24 @@ function awcRenderLines(boxId){
     x.addEventListener('click', ()=>{ items.splice(i, 1); awcRenderLines(boxId); });
     row.appendChild(descWrap); row.appendChild(qty); row.appendChild(priceWrap); row.appendChild(x); row.appendChild(sug);
     box.appendChild(row);
+    box.appendChild(detailLine);
+    // Not in Products & Services (Nov 1): a button under the line opens Add
+    // line item with the line's name, price and description filled in
+    const addPs = document.createElement('button');
+    addPs.type = 'button';
+    addPs.innerHTML = '<span style="font-size:15px;line-height:1;margin-right:5px;">+</span>Add to Products &amp; Services';
+    addPs.style.cssText = 'display:none;align-items:center;width:auto;margin:-2px 0 10px 2px;padding:6px 12px;border-radius:999px;'
+      + 'border:1.5px solid #9CC5BF;background:var(--teal-pale);color:var(--teal-deep);font-size:13px;font-weight:700;cursor:pointer;';
+    const drawAddPs = ()=>{ addPs.style.display = desc.value.trim() && !awcHasProduct(desc.value) ? 'inline-flex' : 'none'; };
+    addPs.addEventListener('click', ()=>{
+      awcProductWindow({name: desc.value.trim(), price: item.price, detail: item.detail, from: isQuote ? 'quote' : 'work order', onSaved: saved=>{
+        if(saved.name !== desc.value){ item.description = saved.name; desc.value = saved.name; }
+        drawAddPs();
+      }});
+    });
+    desc.addEventListener('input', drawAddPs);
+    drawAddPs();
+    box.appendChild(addPs);
   });
   total();
 }
@@ -17160,9 +17505,18 @@ function awcQuoteExpiresDays(){
 }
 var AWC_QUOTE_EMAIL_DEFAULTS = {
   header: '', subheader: '',
+  body: 'Hi {first name},\nHere\u2019s your quote. Please review it when you have a chance, and let us know if you\u2019d like us to proceed.',   // above the items (Nov 1)
   closing: 'Questions, or ready to go ahead? Just reply to this email.',
   signoff: null, showContact: true
 };
+// The quote email's body (Nov 1): a few words between the customer and the
+// items. {first name} becomes the customer's first name ("there" if none).
+function quoteBodyText(body, customer){
+  const raw = String(customer && customer.name || '').trim();
+  const first = (raw.indexOf(',') !== -1 ? raw.split(',')[1] : raw).trim().split(/\s+/)[0] || 'there';
+  return String(body || '').replace(/\{\s*first\s*name\s*\}/gi, first).trim();
+}
+
 function awcQuoteEmailStyle(){
   return Object.assign({}, AWC_QUOTE_EMAIL_DEFAULTS, lsGet('quoteEmailStyle') || {});
 }
@@ -17358,7 +17712,7 @@ async function awcCheckQuoteAnswers(){
   if(Date.now() - awcAnswersAt < 30000) return;
   awcAnswersAt = Date.now();
   try{
-    const res = await fieldAuthed('/rest/v1/quote_responses?select=quote_id,outcome,responded_at&outcome=not.is.null', {method: 'GET'});
+    const res = await fieldAuthed('/rest/v1/quote_responses?select=quote_id,outcome,responded_at,details&outcome=not.is.null', {method: 'GET'});
     if(!res.ok || !Array.isArray(res.body)) return;
     const list = lsGet('workOrders') || [];
     let changed = false;
@@ -17366,7 +17720,11 @@ async function awcCheckQuoteAnswers(){
       const w = list.find(x => x && x.id === a.quote_id);
       if(!w) return;
       const approved = a.outcome === 'approved';
-      if(w.closed && !w.expired && !!w.approved === approved && !!w.denied === !approved) return;
+      // Each line's answer (Nov 1): 'approved', 'denied' or null, in line order
+      const lines = a.details && Array.isArray(a.details.answers) ? a.details.answers.map(x => x === 'approved' || x === 'denied' ? x : null) : null;
+      const sameLines = JSON.stringify(lines || null) === JSON.stringify(w.lineAnswers || null);
+      if(w.closed && !w.expired && !!w.approved === approved && !!w.denied === !approved && sameLines) return;
+      if(lines) w.lineAnswers = lines; else delete w.lineAnswers;
       w.closed = true; w.approved = approved; w.denied = !approved; w.expired = false;
       w[approved ? 'approvedAt' : 'deniedAt'] = a.responded_at || new Date().toISOString();
       w.answeredByCustomer = true;
@@ -17383,7 +17741,8 @@ async function awcCheckQuoteAnswers(){
 function awcQuoteStatus(w){
   const days = Number(w.expiresDays) || AWC_QUOTE_ANSWER_DAYS;
   const sentAt = new Date(w.createdAt || 0).getTime();
-  if(w.approved) return {key: 'approved', text: 'APPROVED', colour: '#3E8F5F'};
+  // Some lines approved, some not (Nov 1)
+  if(w.approved){ const lt = quoteLineTally(w); return {key: 'approved', text: lt.mixed ? 'APPROVED ' + lt.yes + ' OF ' + lt.of : 'APPROVED', colour: '#3E8F5F'}; }
   if(w.denied) return {key: 'declined', text: 'DECLINED', colour: '#B8492E'};
   if(w.expired || (sentAt && Date.now() - sentAt > days * 86400000)) return {key: 'expired', text: 'EXPIRED', colour: '#8A9997'};
   if(w.status === 'draft') return {key: 'draft', text: 'NOT SENT', colour: '#B8492E'};
@@ -17445,7 +17804,13 @@ function awcRenderQuoteCurrent(){
 // A sent quote shown in a window (Oct 20): the Approve, Decline and Download
 // buttons as in the email, white words on both answers and Decline red, but
 // only a look (nothing in them can be pressed)
-function quoteHtmlForLook(html){
+// How a quote's lines were answered (Nov 1): counts, and whether it's a mix
+function quoteLineTally(w){
+  const a = w && Array.isArray(w.lineAnswers) ? w.lineAnswers : [];
+  const yes = a.filter(x => x === 'approved').length, no = a.filter(x => x === 'denied').length;
+  return {yes: yes, no: no, of: (w && w.lineItems || []).length || a.length, mixed: yes > 0 && no > 0 || (yes > 0 && yes < ((w && w.lineItems || []).length || a.length))};
+}
+function quoteHtmlForLook(html, answers){
   try{
     const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
     doc.querySelectorAll('a[href*="quote-response"]').forEach(a=>{
@@ -17454,6 +17819,20 @@ function quoteHtmlForLook(html){
       a.removeAttribute('target');
       a.style.setProperty('pointer-events', 'none', 'important');
       a.style.setProperty('cursor', 'default', 'important');
+      // A line's own Approve / Decline (Nov 1) keeps its colours; once the
+      // customer has answered that line, their choice is filled in and the
+      // other one faded
+      const ln = href.match(/[?&]line=(\d+)/);
+      if(ln){
+        const ans = Array.isArray(answers) ? answers[Number(ln[1])] : null;
+        const mine = /[?&]a=deny/.test(href) ? 'denied' : 'approved';
+        if(ans === mine){
+          const ink = mine === 'denied' ? '#B8492E' : (a.style.borderColor || '#134E4A');
+          a.style.setProperty('background', ink, 'important');
+          a.querySelectorAll('span').forEach(sp => sp.style.setProperty('color', '#ffffff', 'important'));
+        } else if(ans) a.style.setProperty('opacity', '.35', 'important');
+        return;
+      }
       if(/[?&]a=deny/.test(href)){
         a.style.setProperty('background', '#B8492E', 'important');
         a.style.setProperty('color', '#ffffff', 'important');
@@ -17481,7 +17860,7 @@ function awcOpenQuote(w){
   const frame = document.createElement('iframe');
   frame.style.cssText = 'flex:1;min-height:360px;width:100%;border:1px solid var(--line);border-radius:10px;background:#F4F6F5;';
   frame.setAttribute('sandbox', '');
-  frame.srcdoc = w.emailHtml ? quoteHtmlForLook(w.emailHtml) : awcQuoteEmailHtml((customers || []).find(c => c && c.id === w.customerId) || {name: 'Customer'},
+  frame.srcdoc = w.emailHtml ? quoteHtmlForLook(w.emailHtml, w.lineAnswers) : awcQuoteEmailHtml((customers || []).find(c => c && c.id === w.customerId) || {name: 'Customer'},
     'Quote', w.date || '', w.lineItems || [], Number(w.total) || 0, w.notes || '', null, null, w.number);
   const btns = document.createElement('div');
   btns.className = 'btn-row';
@@ -17526,6 +17905,8 @@ function awcCustomizeQuoteEmail(){
     + '<p style="font-size:13px;color:var(--muted);margin:0 0 14px;">The top and bottom of every quote email, here and on the website.</p>'
     + '<div class="field"><label>Header</label><input data-f="header"></div>'
     + '<div class="field"><label>Line under the header (optional)</label><input data-f="subheader" placeholder="e.g. Licensed &amp; insured"></div>'
+    + '<div class="field"><label>Body (optional)</label><textarea data-f="body" rows="4" placeholder="A few words above the quote"></textarea>'
+    + '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Shows under the customer\u2019s name and address, above the items. {first name} becomes the customer\u2019s first name.</div></div>'
     + '<div class="field"><label>Closing line</label><textarea data-f="closing" rows="2"></textarea></div>'
     + '<div class="field"><label>Sign-off</label><input data-f="signoff"></div>'
     + '<label class="inline-check" style="margin:2px 0 16px;"><input type="checkbox" data-f="showContact"> Show phone, email and website</label>'
@@ -17541,12 +17922,13 @@ function awcCustomizeQuoteEmail(){
     f('header').value = v.header || '';
     f('header').placeholder = awcCompanyName();
     f('subheader').value = v.subheader || '';
+    f('body').value = v.body || '';
     f('closing').value = v.closing || '';
     f('signoff').value = v.signoff !== null && v.signoff !== undefined ? v.signoff
       : (report.signoff !== undefined ? report.signoff : 'Thank you for your business.');
     f('showContact').checked = v.showContact !== false;
   };
-  const values = ()=> ({header: f('header').value, subheader: f('subheader').value, closing: f('closing').value,
+  const values = ()=> ({header: f('header').value, subheader: f('subheader').value, body: f('body').value, closing: f('closing').value,
     signoff: f('signoff').value, showContact: f('showContact').checked});
   fill(q);
   const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
@@ -17562,7 +17944,7 @@ function awcCustomizeQuoteEmail(){
   card.querySelector('[data-preview]').addEventListener('click', ()=>{
     const sample = {name: 'Sample Customer', address: '123 Main St'};
     const html = awcQuoteEmailHtml(sample, 'Quote', new Date().toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'}),
-      [{description: 'Variable-speed pump', qty: 1, price: 1249}, {description: 'Install labour', qty: 2, price: 95}],
+      [{description: 'Variable-speed pump', qty: 1, price: 1249}, {description: 'Install labor', qty: 2, price: 95}],
       1439, 'Sample notes.', values(), null, awcNextQuoteNumber(), awcQuoteExpiresDays());
     const pv = document.createElement('div');
     pv.className = 'confirm-overlay';
@@ -17584,6 +17966,16 @@ function awcCustomizeQuoteEmail(){
   document.body.appendChild(overlay);
 }
 
+// Buttons in an email keep their look (Nov 1): the email's rule that stops
+// phones turning numbers and addresses into links also took the white words
+// and bold off Approve, Decline, Download and Send a message in mail apps
+// that read it (Gmail among them). Each link's own colour, weight and size win.
+function emailLinksKeepLook(html){
+  return String(html).replace(/<a href="[^"]*"[^>]*>/g, tag => tag
+    .replace(/(;|")color:([^;"!]+);/, (m, a, c) => a + 'color:' + c + ' !important;')
+    .replace(/font-weight:([^;"!]+);/, (m, w) => 'font-weight:' + w + ' !important;')
+    .replace(/font-size:([^;"!]+);/, (m, w) => 'font-size:' + w + ' !important;'));
+}
 function awcQuoteEmailHtml(customer, type, dateText, items, total, notes, styleOverride, respondUrl, quoteNumber, expiresDays){
   const style = lsGet('reportEmailStyle') || {};
   const q = styleOverride || awcQuoteEmailStyle();
@@ -17595,11 +17987,14 @@ function awcQuoteEmailHtml(customer, type, dateText, items, total, notes, styleO
   const head = 'padding:8px 10px;border-bottom:2px solid #E6E9E8;font-size:11.5px;font-weight:700;'
     + 'color:#0F766E;text-transform:uppercase;letter-spacing:0.05em;';
 
+  // One answer for the whole quote (Nov 1): no buttons on the lines; Approve
+  // and Decline at the bottom
   const rows = items.map(item=>{
     const qty = parseFloat(item.qty) || 0;
     const price = parseFloat(item.price) || 0;
     return '<tr>'
-      + '<td style="' + cell + 'color:#16302E;">' + awcEsc(item.description) + '</td>'
+      + '<td style="' + cell + 'color:#16302E;">' + awcEsc(item.description)
+        + (item.detail ? '<div style="font-size:12.5px;color:#6B7B79;margin-top:3px;line-height:1.4;white-space:pre-wrap;">' + awcEsc(item.detail) + '</div>' : '') + '</td>'
       + '<td style="' + cell + 'color:#4A5A58;text-align:center;white-space:nowrap;">' + awcEsc(String(qty)) + '</td>'
       + '<td style="' + cell + 'color:#4A5A58;text-align:right;white-space:nowrap;">' + money(price) + '</td>'
       + '<td style="' + cell + 'color:#16302E;font-weight:600;text-align:right;white-space:nowrap;">' + money(qty * price) + '</td>'
@@ -17616,7 +18011,7 @@ function awcQuoteEmailHtml(customer, type, dateText, items, total, notes, styleO
   const signoff = q.signoff !== null && q.signoff !== undefined ? q.signoff
     : (style.signoff !== undefined ? style.signoff : 'Thank you for your business.');
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+  return emailLinksKeepLook('<!DOCTYPE html><html><head><meta charset="utf-8">'
     + '<meta name="format-detection" content="telephone=no,address=no,email=no,date=no">'
     + '<style>a[href^="tel"],a[href^="mailto"],a[href^="http"],a[x-apple-data-detectors]{'
     + 'color:inherit !important;text-decoration:none !important;font-size:inherit !important;'
@@ -17647,6 +18042,8 @@ function awcQuoteEmailHtml(customer, type, dateText, items, total, notes, styleO
     + (customer.address ? '<div style="font-size:13.5px;color:#6B7B79;margin-top:3px;">' + awcEsc(customer.address) + '</div>' : '')
     + '<div style="font-size:13.5px;color:#6B7B79;margin-top:3px;">' + awcEsc(dateText) + '</div>'
     + '</td></tr>'
+    // The body (Nov 1): a soft panel under the customer, above the items
+    + (quoteBodyText(q.body, customer) ? '<tr><td style="padding:20px 26px 0;"><div style="font-size:14.5px;color:#33463F;line-height:1.6;white-space:pre-wrap;padding:16px 18px;background:#F6F9F8;border-radius:10px;">' + awcEsc(quoteBodyText(q.body, customer)) + '</div></td></tr>' : '')
     // The items
     + '<tr><td style="padding:20px 26px 0;">'
     + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">'
@@ -17687,7 +18084,7 @@ function awcQuoteEmailHtml(customer, type, dateText, items, total, notes, styleO
     + (bits.length ? '<div style="font-size:12.5px;color:#4A5A58;margin-top:4px;">' + bits.join(' &nbsp;&middot;&nbsp; ') + '</div>' : '')
     + (lsGet('licenseNumber') ? '<div style="font-size:11.5px;color:#8A9997;margin-top:3px;">License ' + awcEsc(lsGet('licenseNumber')) + '</div>' : '')
     + '</td></tr>'
-    + '</table></td></tr></table></body></html>';
+    + '</table></td></tr></table></body></html>');
 }
 
 function awcQuoteDownloadDetails(customer, type, dateText, items, total, notes, quoteNumber, expiresDays, quoteName){
@@ -17706,7 +18103,8 @@ function awcQuoteDownloadDetails(customer, type, dateText, items, total, notes, 
     date: dateText || '',
     expiresOn: expiresOn,
     customer: {name: customer.name || '', address: customer.address || ''},
-    items: (items || []).map(li => ({description: String(li.description || ''), qty: parseFloat(li.qty) || 0, price: parseFloat(li.price) || 0})),
+    items: (items || []).map(li => Object.assign({description: String(li.description || ''), qty: parseFloat(li.qty) || 0, price: parseFloat(li.price) || 0},
+      li.detail ? {detail: String(li.detail)} : {})),
     total: Number(total) || 0,
     notes: notes || '',
     colour: style.colour || '#134E4A',
@@ -17747,9 +18145,32 @@ function makeRoutePlace(o){
     const c = ctx();
     if(c.off){ host.style.display = 'none'; host.innerHTML = ''; return; }
     host.style.display = '';
+    // Redrawn in place (Nov 2): the list keeps its own scroll and the page
+    // stays exactly where it is
+    const oldBox = host.querySelector('.rp-box');
+    const keepBoxTop = oldBox ? oldBox.scrollTop : 0;
+    const keepY = window.scrollY;
+    const keepH = host.offsetHeight;
+    if(keepH) host.style.minHeight = keepH + 'px';
+    const settle = ()=>{
+      const nb = host.querySelector('.rp-box');
+      // A new technician, day or customer (or the first look): the list opens
+      // on where the job is in the route already (Nov 2); otherwise it stays put
+      const key = [c.techId, c.iso, c.own].join('|');
+      const fresh = !oldBox || st.lastKey !== key;
+      st.lastKey = key;
+      if(nb){
+        const job = nb.querySelector('.rp-job');
+        if(fresh && job) nb.scrollTop = Math.max(0, job.offsetTop - nb.offsetTop - nb.clientHeight / 2 + job.offsetHeight / 2);
+        else nb.scrollTop = keepBoxTop;
+      }
+      host.style.minHeight = '';
+      if(Math.abs(window.scrollY - keepY) > 1) window.scrollTo(0, keepY);
+    };
     if(c.note){
       st.pending = undefined;
       host.innerHTML = '<label>Where in the route</label><div class="rp-note">' + esc2(c.note) + '</div>';
+      settle();
       return;
     }
     const ids = c.stops.map(s => String(s.id));
@@ -17775,9 +18196,11 @@ function makeRoutePlace(o){
       g.className = 'rp-gap';
       g.title = 'Put it here';
       g.addEventListener('click', e=>{
-        e.stopPropagation();
-        // Back where it already is: nothing to assign
-        st.pending = (ok(st.assigned) ? st.assigned : ownAt) === after ? undefined : after;
+        e.stopPropagation(); e.preventDefault();
+        // A tap puts it there (Nov 2): no Assign to press. Back under its
+        // own customer counts as no place chosen.
+        st.pending = undefined;
+        st.assigned = after === ownAt ? undefined : after;
         draw();
       });
       return g;
@@ -17795,20 +18218,16 @@ function makeRoutePlace(o){
     if(shown === null) box.appendChild(jobRow());
     const foot = host.querySelector('.rp-foot');
     const after = v => v === '' ? 'at the start of the route' : 'after ' + o.nameOf(c.stops.find(s => String(s.id) === v) || {});
-    if(st.pending !== undefined){
-      foot.innerHTML = '<div class="btn-row" style="flex-wrap:nowrap;margin-top:10px;">'
-        + '<button type="button" class="btn btn-primary" data-rp-assign style="flex:1 1 0;min-width:0;">Assign</button>'
-        + '<button type="button" class="btn btn-ghost" data-rp-back style="flex:1 1 0;min-width:0;">Put it back</button></div>';
-      foot.querySelector('[data-rp-assign]').addEventListener('click', e=>{ e.stopPropagation(); st.assigned = st.pending; st.pending = undefined; draw(); });
-      foot.querySelector('[data-rp-back]').addEventListener('click', e=>{ e.stopPropagation(); st.pending = undefined; draw(); });
-    } else if(ok(st.assigned)){
-      foot.innerHTML = '<div class="rp-done">✓ Assigned ' + esc2(after(st.assigned)) + '</div>'
-        + '<button type="button" class="btn btn-ghost" data-rp-own style="width:auto;margin-top:6px;padding:5px 10px;font-size:12px;">Put it under its customer</button>';
-      foot.querySelector('[data-rp-own]').addEventListener('click', e=>{ e.stopPropagation(); st.assigned = undefined; draw(); });
+    if(ok(st.assigned)){
+      foot.innerHTML = '<div class="rp-done">✓ Goes ' + esc2(after(st.assigned)) + '</div>'
+        + (ownAt ? '<button type="button" class="btn btn-ghost" data-rp-own style="width:auto;margin-top:6px;padding:5px 10px;font-size:12px;">Put it under its customer</button>' : '');
+      const own = foot.querySelector('[data-rp-own]');
+      if(own) own.addEventListener('click', e=>{ e.stopPropagation(); st.assigned = undefined; draw(); });
     } else {
       foot.innerHTML = '<div class="rp-note">' + (ownAt ? 'It goes under its customer. ' : (c.own ? 'Its customer isn’t on this route that day, so it goes at the end. ' : 'It goes at the end. '))
-        + 'Tap a gap to move it, then press Assign.</div>';
+        + 'Tap a gap to put it somewhere else.</div>';
     }
+    settle();
   }
   return {
     refresh: draw,
@@ -17816,7 +18235,7 @@ function makeRoutePlace(o){
     value: ()=>{ const c = ctx(); return (!c.off && !c.note && typeof st.assigned === 'string') ? st.assigned : undefined; },
     unassigned: ()=> st.pending !== undefined && !!el() && !!el().querySelector('[data-rp-assign]'),
     assignBtn: ()=> el() && el().querySelector('[data-rp-assign]'),
-    set: v=>{ st.assigned = typeof v === 'string' ? v : undefined; st.pending = undefined; draw(); },
+    set: v=>{ st.assigned = typeof v === 'string' ? v : undefined; st.pending = undefined; st.lastKey = undefined; draw(); },
     reset: ()=>{ st.assigned = undefined; st.pending = undefined; draw(); }
   };
 }
@@ -18745,7 +19164,7 @@ function awcOpenForEditing(isTask, r){
   document.getElementById('awcWoNotes').value = first.notes || '';
   awcWoCustomers = first.customerId ? [first.customerId] : [];
   awcWoTechs = first.technicianId ? [String(first.technicianId)] : [];
-  awcLineItems = (first.lineItems || []).map(li => ({description: li.description || '', qty: li.qty, price: li.price}));
+  awcLineItems = (first.lineItems || []).map(li => Object.assign({description: li.description || '', qty: li.qty, price: li.price}, li.detail ? {detail: li.detail} : {}));
   if(!awcLineItems.length) awcLineItems = [{description: '', qty: '', price: ''}];
   let rep = {repeat: 'none'};
   if(left.length > 1){
@@ -18809,7 +19228,7 @@ function awcVisitEditor(isTask, id, onDone){
     details = document.createElement('textarea'); details.rows = 3; details.value = item.details || '';
     panel.appendChild(field('Details', details));
   } else {
-    lines = (item.lineItems || []).map(li => ({description: li.description || '', qty: li.qty === undefined ? '' : li.qty, price: li.price === undefined ? '' : li.price, filterClean: li.filterClean}));
+    lines = (item.lineItems || []).map(li => Object.assign({description: li.description || '', qty: li.qty === undefined ? '' : li.qty, price: li.price === undefined ? '' : li.price, filterClean: li.filterClean}, li.detail ? {detail: li.detail} : {}));   // keeps its description (Nov 1)
     if(!lines.length) lines.push({description: '', qty: 1, price: ''});
     const liBox = document.createElement('div');
     const drawLines = ()=>{
@@ -19162,16 +19581,21 @@ function awcRenderHistory(){
 // leaves it blank. A grey overlay, gone once there's a date, however the date
 // was set.
 (function datePlaceholders(){
-  const ids = ['awcWoDate', 'awcTaskDate'];
+  // Every date box you can see (Nov 2), not just the WorkCenter's two
+  const isBox = el => el && el.tagName === 'INPUT' && el.type === 'date' && !/opacity:\s*0|width:\s*0|display:\s*none/.test(el.getAttribute('style') || '');
   const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
   // Only where the phone draws nothing itself: a computer shows its own
   const own = !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const wire = ()=> ids.forEach(id=>{
-    const el = document.getElementById(id);
-    if(own || !el || el.dataset.ph) return;
+  const wireOne = el=>{
+    if(own || !isBox(el) || el.dataset.ph) return;
     el.dataset.ph = '1';
     const wrap = document.createElement('span');
-    wrap.style.cssText = 'position:relative;display:inline-flex;vertical-align:top;max-width:100%;';
+    // As wide as the box was meant to be: a full-width box keeps the full width
+    const auto = /width:\s*auto/.test(el.getAttribute('style') || '');
+    const inFlexRow = el.parentElement && getComputedStyle(el.parentElement).display.indexOf('flex') !== -1 && getComputedStyle(el.parentElement).flexDirection.indexOf('row') === 0;
+    wrap.style.cssText = 'position:relative;vertical-align:top;max-width:100%;'
+      + (auto ? 'display:inline-flex;' : inFlexRow ? 'display:flex;flex:1 1 auto;min-width:0;' : 'display:flex;width:100%;');
+    if(el.style.flex){ wrap.style.flex = el.style.flex; }
     el.parentNode.insertBefore(wrap, el);
     wrap.appendChild(el);
     const ph = document.createElement('span');
@@ -19191,9 +19615,20 @@ function awcRenderHistory(){
     show();
     // Sized once it's on screen
     if(window.ResizeObserver){ try{ new ResizeObserver(show).observe(el); }catch(e){} }
-  });
-  // The WorkCenter is built the first time it's opened
+  };
+  const wire = ()=> document.querySelectorAll('input[type=date]').forEach(wireOne);
+  // The WorkCenter is built the first time it's opened; windows come and go
   window.wireDatePlaceholders = wire;
+  if(!own){
+    const start = ()=>{
+      wire();
+      try{ new MutationObserver(list => list.forEach(m => m.addedNodes.forEach(n=>{
+        if(n.nodeType !== 1) return;
+        if(n.tagName === 'INPUT') wireOne(n); else if(n.querySelectorAll) n.querySelectorAll('input[type=date]').forEach(wireOne);
+      }))).observe(document.body, {childList: true, subtree: true}); }catch(e){}
+    };
+    if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  }
 })();
 (function noTypedHistory(){
   const isSearch = el => el && el.tagName === 'INPUT' && /^(text|search)?$/i.test(el.getAttribute('type') || '')
@@ -19237,8 +19672,10 @@ var acalMode = 'today', acalMonth = '', acalSel = '', acalTech = '', acalPick = 
 var acalSlide = 0, acalSwipedAt = 0;   // which way the month just moved by a swipe (1 next, -1 before), and when
 var acalOffice = {filterGroups: null, drainCalendar: null, at: 0};
 const ACAL_TAGS = {fc: ['FC', 'Filter cleans', '#FBF1DD', '#8A5E0B'], pd: ['PD', 'Pool drains', '#C3DEF3', '#174C78'],
-  wo: ['WO', 'Work orders', '#E9EEF0', '#3E5560'], tk: ['TK', 'Tasks', '#E8F1E4', '#4D6B3C']};
+  cr: ['CR', 'Clean & refill', '#8EC5F5', '#0D3A66'],   // overnight drain's second day (Nov 1)
+  wo: ['WO', 'Work orders', '#E9EEF0', '#3E5560'], tk: ['TK', 'Tasks', '#C9EBC3', '#24601F']};
 const ACAL_STATES = {'': ['Not in app', '#8A9795'], app: ['In the app', '#C68A17'], done: ['Done', '#2E8B57']};
+if(CB_ON){ Object.keys(ACAL_TAGS).forEach(k=>{ const c = CB_JOB[ACAL_TAGS[k][0]]; if(c){ ACAL_TAGS[k][2] = c[0]; ACAL_TAGS[k][3] = c[1]; } }); Object.keys(ACAL_STATES).forEach(k=>{ ACAL_STATES[k][1] = CB_STATE[k]; }); }
 function acalEsc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch])); }
 function acalCust(id){ return (customers || []).find(c => c && String(c.id) === String(id)) || null; }
 function acalTechName(id){ const t = (lsGet('technicians') || []).find(x => x && String(x.id) === String(id)); return (t && t.name) || (id ? 'Technician' : 'No technician'); }
@@ -19278,6 +19715,43 @@ async function acalPushOffice(kind, item){
     });
     return !!(res && res.ok && res.body && res.body.result);
   }catch(e){ return false; }
+}
+// Take a pool drain off the calendar from the app (Nov 2): its calendar entry
+// goes at the office, its drains on the route that aren't done come off, and
+// so does its Clean & refill visit
+async function acalTakeOffDrain(r, iso){
+  const e = r.entry;
+  if(e){
+    try{
+      const res = await fieldAuthed('/rest/v1/rpc/push_record_fields', {
+        method: 'POST',
+        body: JSON.stringify({p_kind: 'drain_entry', p_id: String(e.id), p_changes: {_deleted: {t: new Date().toISOString(), v: true}}, p_base: null})
+      });
+      if(!(res && res.ok && res.body && res.body.result)) return false;
+    }catch(err){ return false; }
+    if(Array.isArray(acalOffice.drainCalendar)) acalOffice.drainCalendar = acalOffice.drainCalendar.filter(x => !(x && x.id === e.id));
+  }
+  // Its drains on the route
+  const ids = e ? Object.keys(e.pushed || {}).map(k => e.pushed[k]).concat(e.pushedId ? [e.pushedId] : []) : [];
+  const recs = lsGet('scheduledPoolDrains') || [];
+  const gone = recs.filter(x => x && x.status !== 'done' && (ids.indexOf(x.id) !== -1 || (!e && String(x.customerId) === String(r.cid) && x.date === iso)));
+  if(gone.length){
+    lsSet('scheduledPoolDrains', recs.filter(x => gone.indexOf(x) === -1));
+    gone.forEach(x => queueOfficeWork('pool_drain', x.id, true));
+  }
+  // Its Clean & refill
+  if(e){
+    const list = lsGet('tasks') || [];
+    const refills = list.filter(t => t && t.refillOf === e.id && !t.done);
+    if(refills.length){
+      const keep = list.filter(t => refills.indexOf(t) === -1);
+      lsSet('tasks', keep);
+      try{ if(typeof tasks !== 'undefined') tasks = keep; }catch(err){}
+      refills.forEach(t => queueOfficeWork('task', t.id, true));
+    }
+  }
+  try{ fieldNoteLocalChange(); }catch(err){}
+  return true;
 }
 // A customer's bodies of water, as the website lists them for a drain
 function acalBodies(c){
@@ -19497,7 +19971,10 @@ function acalOnDays(){
       if(!g || !g.date) return;
       const paused = id => Array.isArray(g.pausedIds) && g.pausedIds.indexOf(id) !== -1;
       const techOf = cid => (g.custTech && g.custTech[cid]) || g.technicianId || (g.solo ? ((acalCust(cid) || {}).technicianId || '') : '');
-      const rows = (g.customerIds || []).filter(cid => !paused(cid) && acalCust(cid)).map(cid=>{
+      // Rescheduled to another day on the route (Nov 2): shown on that day instead
+      const movedAway = cid => fcRecs.some(f => f && !f.reopened && f.groupId === g.id && f.customerId === cid && f.status !== 'done' && f.date && f.date !== g.date)
+        && !fcRecs.some(f => f && !f.reopened && f.groupId === g.id && f.customerId === cid && f.date === g.date);
+      const rows = (g.customerIds || []).filter(cid => !paused(cid) && acalCust(cid) && !movedAway(cid)).map(cid=>{
         const rec = fcRecs.find(f => f && !f.reopened && f.groupId === g.id && f.customerId === cid && f.date === g.date && f.status === 'done')
           || fcRecs.find(f => f && !f.reopened && f.groupId === g.id && f.customerId === cid && f.date === g.date);
         const st = rec && rec.status === 'done' ? 'done' : (g.finalized && !(g.custHold && g.custHold[cid]) ? 'app' : '');
@@ -19505,6 +19982,18 @@ function acalOnDays(){
       }).filter(r => mineTech(r.tech));
       if(rows.length) day(g.date).fc.push({name: g.solo ? 'On their own' : (g.name || 'Group'), solo: !!g.solo, tech: g.technicianId, rows: rows});
     });
+    // Filter cleans on the route on a day their group isn't (moved, or made
+    // again from Serviced): on that day, on their own (Nov 2)
+    const extra = {};
+    fcRecs.forEach(f=>{
+      if(!f || f.reopened || !f.date || !acalCust(f.customerId) || !mineTech(f.technicianId)) return;
+      const g = f.groupId ? acalOffice.filterGroups.find(x => x && x.id === f.groupId) : null;
+      if(g && g.date === f.date && (g.customerIds || []).indexOf(f.customerId) !== -1) return;
+      const solo = acalOffice.filterGroups.find(x => x && x.solo && x.date === f.date && (x.customerIds || []).indexOf(f.customerId) !== -1);
+      if(solo) return;
+      (extra[f.date] = extra[f.date] || {name: 'On their own', solo: true, tech: '', rows: []}).rows.push({cid: f.customerId, st: f.status === 'done' ? 'done' : 'app', tech: f.technicianId});
+    });
+    Object.keys(extra).forEach(d => day(d).fc.push(extra[d]));
   } else {
     // Not reached the server yet: what's in the app
     const groups = {};
@@ -19523,10 +20012,23 @@ function acalOnDays(){
       if(!mineTech(tech)) return;
       const ids = Object.keys(e.pushed || {}).map(k => e.pushed[k]).concat(e.pushedId ? [e.pushedId] : []);
       const recs = pdRecs.filter(r => r && ids.indexOf(r.id) !== -1);
+      // Every drain of it rescheduled to another day on the route (Nov 2): shown there
+      if(recs.length && recs.every(r => !r.reopened && r.status !== 'done' && r.date && r.date !== e.date)) return;
       const st = !recs.length ? '' : (recs.every(r => r.status === 'done') ? 'done' : 'app');
       const kinds = (Array.isArray(e.bodyKinds) && e.bodyKinds.length ? e.bodyKinds : [e.bodyKind || 'pool']);
       const bodies = recs.length ? recs.map(r => r.bodyName || r.bodyKind) : kinds.map(k => ({pool: 'Pool', spa: 'Spa', fountain: 'Fountain', extra: 'Extra'})[k] || 'Body of water');
-      day(e.date).pd.push({cid: e.customerId, st: st, tech: tech, bodies: bodies});
+      day(e.date).pd.push({cid: e.customerId, st: st, tech: tech, bodies: bodies, entry: e});
+    });
+    // Drains on the route on a day their calendar entry isn't: on that day (Nov 2)
+    const shown = {};
+    pdRecs.forEach(r=>{
+      if(!r || r.reopened || !r.date || !acalCust(r.customerId) || !mineTech(r.technicianId)) return;
+      const e = acalOffice.drainCalendar.find(x => x && (x.id === r.calendarId || Object.keys(x.pushed || {}).some(k => x.pushed[k] === r.id) || x.pushedId === r.id));
+      if(e && e.date === r.date) return;
+      const k = r.date + '\u0002' + r.customerId;
+      if(shown[k]){ shown[k].bodies.push(r.bodyName || r.bodyKind); if(r.status !== 'done') shown[k].st = 'app'; return; }
+      shown[k] = {cid: r.customerId, st: r.status === 'done' ? 'done' : 'app', tech: r.technicianId, bodies: [r.bodyName || r.bodyKind || 'Pool'], entry: e ? Object.assign({}, e, {date: r.date}) : null};
+      day(r.date).pd.push(shown[k]);
     });
   } else {
     const seen = {};
@@ -19540,11 +20042,11 @@ function acalOnDays(){
   }
   (lsGet('scheduledWorkOrders') || []).forEach(j=>{
     if(!j || j.reopened || !j.date || !acalCust(j.customerId) || !mineTech(j.technicianId)) return;
-    day(j.date).wo.push({rec: j, cid: j.customerId, st: j.status === 'done' ? 'done' : j.held ? '' : 'app', tech: j.technicianId});
+    day(j.date).wo.push({rec: j, cid: j.customerId, st: j.status === 'done' ? 'done' : j.held ? '' : 'app', tech: j.technicianId, fcLike: woIsFilterClean(j.lineItems)});
   });
   (lsGet('tasks') || []).forEach(t=>{
     if(!t || t.reopened || !t.date || !mineTech(t.technicianId)) return;
-    day(t.date).tk.push({rec: t, cid: (t.customerIds || [])[0] || t.customerId || '', st: t.done ? 'done' : t.held ? '' : 'app', tech: t.technicianId});
+    day(t.date).tk.push({rec: t, cid: (t.customerIds || [])[0] || t.customerId || '', st: t.done ? 'done' : t.held ? '' : 'app', tech: t.technicianId, crLike: isRefillJob(t)});
   });
   return by;
 }
@@ -19577,7 +20079,8 @@ function acalDraw(){
   const pickBtn = btn('<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
     'btn-ghost', 'width:36px;padding:7px 0;display:inline-flex;align-items:center;justify-content:center;' + (acalPick ? 'background:var(--teal-pale);' : ''));
   pickBtn.title = 'Pick a month and year';
-  pickBtn.addEventListener('click', ()=>{ acalPick = !acalPick; acalPickYear = yy; acalDraw(); });
+  // A window now, not a box under the month (Nov 1)
+  pickBtn.addEventListener('click', ()=> monthPickWindow(acalMonth || (yy + '-' + String(mm).padStart(2, '0')), m=>{ acalPick = false; go(new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1)); }, 14));
   head.appendChild(prev); head.appendChild(label); head.appendChild(next); head.appendChild(pickBtn);
   card.appendChild(head);
   // Whose: everyone, or one technician
@@ -19628,10 +20131,16 @@ function acalDraw(){
     cell.innerHTML = '<div style="font-size:11px;font-weight:700;' + (iso === today ? 'color:#fff;background:var(--teal-deep);border-radius:50%;width:19px;height:19px;display:flex;align-items:center;justify-content:center;' : 'color:var(--ink);') + '">' + d + '</div>';
     const tags = document.createElement('div');
     tags.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px 4px;margin-top:5px;';
-    ['fc', 'pd', 'wo', 'tk'].forEach(k=>{
-      const n = acalCount(on, k);
+    ['fc', 'pd', 'cr', 'wo', 'tk'].forEach(k=>{
+      // Work orders with a filter clean on them count as filter cleans (Nov 1)
+      // Clean & refill tasks get their own CR tag (Nov 1)
+      let rows = k === 'cr' ? on.tk.filter(r => r.crLike) : acalAllRows(on, k);
+      if(k === 'tk') rows = rows.filter(r => !r.crLike);
+      if(k === 'fc') rows = rows.concat(on.wo.filter(r => r.fcLike));
+      if(k === 'wo') rows = rows.filter(r => !r.fcLike);
+      const n = rows.length;
       if(!n) return;
-      const st = acalTagState(acalAllRows(on, k));
+      const st = acalTagState(rows);
       const t = document.createElement('span');
       // In its job's colour, with a dot for where it's up to (Oct 28)
       t.style.cssText = "position:relative;font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;padding:1px 3px;border-radius:4px;line-height:1.25;"
@@ -19697,7 +20206,8 @@ function acalDayWindow(on){
   const add = document.createElement('button');
   add.type = 'button'; add.className = 'btn btn-ghost'; add.style.cssText = 'width:auto;flex:0 0 auto;padding:7px 12px;font-size:13px;';
   add.textContent = '+ Job';
-  add.addEventListener('click', e=>{ e.stopPropagation(); acalJobMenu = !acalJobMenu; acalDraw(); });
+  // A window with every kind of job (Nov 2): the drop-down ran off the screen
+  add.addEventListener('click', e=>{ e.stopPropagation(); acalJobMenu = false; acalJobWindow(iso); });
   const close = document.createElement('button');
   close.type = 'button'; close.className = 'btn btn-primary'; close.style.cssText = 'width:auto;flex:0 0 auto;padding:7px 12px;font-size:13px;';
   close.textContent = 'Close';
@@ -19747,25 +20257,79 @@ function acalDayWindow(on){
     return r;
   };
   const techText = id=>{ const s = document.createElement('span'); s.style.cssText = 'font-size:11.5px;color:var(--muted);width:84px;text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; s.textContent = acalTechName(id); return s; };
+  // Move to another day (Nov 1): the calendar-with-arrow button
+  const moveBtn = opts=>{
+    const m = document.createElement('button');
+    m.type = 'button';
+    m.title = 'Move to another day';
+    m.setAttribute('aria-label', m.title);
+    m.style.cssText = 'width:28px;height:28px;flex-shrink:0;border-radius:7px;border:1px solid #BFDCD8;background:#fff;color:var(--teal-deep);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;';
+    m.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M10 15h6M13.5 12.5L16 15l-2.5 2.5"/></svg>';
+    m.addEventListener('click', e=>{ e.stopPropagation(); acalMoveDialog(Object.assign({fromIso: iso}, opts)); });
+    return m;
+  };
   on.fc.forEach(g=>{
     badge('fc', g.name + (g.solo ? '' : g.tech ? ' · ' + acalTechName(g.tech) : ''));
     g.rows.forEach(r => row((acalCust(r.cid) || {}).name || 'Customer', '', r.st, [techText(r.tech)]));
   });
   if(on.pd.length){
     badge('pd');
-    on.pd.forEach(r => row((acalCust(r.cid) || {}).name || 'Customer', r.bodies.join(', '), r.st, [techText(r.tech)]));
+    on.pd.forEach(r=>{
+      const right = [techText(r.tech)];
+      // Move (Nov 1): the day's drain and anything of it on the route, not done
+      if(r.entry && r.st !== 'done') right.push(moveBtn({
+        name: (acalCust(r.cid) || {}).name || 'Customer', what: 'Pool drain', techId: r.tech || '',
+        onMove: async (to, tech)=>{
+          const e = JSON.parse(JSON.stringify(r.entry));
+          const c = acalCust(r.cid) || {};
+          e.date = to;
+          if(tech && String(tech) !== String(c.technicianId || '')) e.technicianId = tech; else delete e.technicianId;
+          if(!(await acalPushOffice('drain_entry', e))) return false;
+          Object.assign(r.entry, e);
+          const ids = Object.keys(e.pushed || {}).map(k => e.pushed[k]).concat(e.pushedId ? [e.pushedId] : []);
+          if(ids.length){
+            const recs = lsGet('scheduledPoolDrains') || [];
+            recs.forEach(x=>{ if(x && ids.indexOf(x.id) !== -1 && x.status !== 'done'){ x.date = to; x.technicianId = tech || c.technicianId || x.technicianId; queueOfficeWork('pool_drain', x.id, false); } });
+            lsSet('scheduledPoolDrains', recs);
+          }
+          return true;
+        }
+      }));
+      // Take it off (Nov 2): the drain, what of it is on the route, and its
+      // Clean & refill, with the same bin as the WorkCenter's
+      if(r.st !== 'done'){
+        const bin = document.createElement('button');
+        bin.type = 'button';
+        bin.title = 'Take this pool drain off';
+        bin.setAttribute('aria-label', bin.title);
+        bin.style.cssText = 'display:inline-flex;cursor:pointer;';
+        bin.innerHTML = '<svg class="weir-bin" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        bin.addEventListener('click', async e=>{
+          e.stopPropagation();
+          const who = (acalCust(r.cid) || {}).name || 'this customer';
+          const ok = await confirmDialog('Take ' + who + '\u2019s pool drain off ' + h.textContent + '? It comes off the route too, with its Clean & refill.', 'Take off');
+          if(!ok) return;
+          if(!(await acalTakeOffDrain(r, iso))){ showToast('Couldn\u2019t reach the office \u2014 try again with a connection'); return; }
+          acalDraw();
+          showToast('Taken off');
+        });
+        right.push(bin);
+      }
+      row((acalCust(r.cid) || {}).name || 'Customer', r.bodies.join(', '), r.st, right);
+    });
   }
   // Work orders and tasks: the technician can be changed and one taken off
   // here, as on the website
   const kinds = {wo: ['scheduledWorkOrders', 'work_order', 'work order'], tk: ['tasks', 'task', 'task']};
-  ['wo', 'tk'].forEach(k=>{
-    if(!on[k].length) return;
-    badge(k);
-    on[k].forEach(it=>{
+  // Clean & refill visits under their own CR heading (Nov 2), then the tasks
+  [['wo', 'wo', on.wo], ['cr', 'tk', on.tk.filter(it => it.crLike)], ['tk', 'tk', on.tk.filter(it => !it.crLike)]].forEach(([tag, k, items])=>{
+    if(!items.length) return;
+    badge(tag);
+    items.forEach(it=>{
       const rec = it.rec;
       const c = acalCust(it.cid);
       const name = k === 'wo' ? ((c && c.name) || 'Customer') : (c ? c.name : (rec.title || 'Task'));
-      const sub = k === 'wo' ? ((rec.workOrderNumber ? '#' + String(rec.workOrderNumber).padStart(4, '0') + ' · ' : '') + (rec.title || '')) : (rec.title || '');
+      const sub = k === 'wo' ? ((rec.workOrderNumber ? '#' + String(rec.workOrderNumber).padStart(4, '0') + ' · ' : '') + (rec.title || '')) : tag === 'cr' ? 'Clean & refill' : (rec.title || '');
       const right = [];
       const done = it.st === 'done';
       const sel = document.createElement('select');
@@ -19787,13 +20351,31 @@ function acalDayWindow(on){
         showToast('Now on ' + acalTechName(sel.value) + '’s route');
       });
       right.push(sel);
+      // Move (Nov 1): to another day; the route follows
+      if(!done) right.push(moveBtn({
+        name: name, what: k === 'wo' ? 'Work order' + (rec.workOrderNumber ? ' #' + String(rec.workOrderNumber).padStart(4, '0') : '') : 'Task' + (c && rec.title ? ': ' + rec.title : ''),
+        techId: rec.technicianId || '',
+        onMove: (to, tech)=>{
+          const list = lsGet(kinds[k][0]) || [];
+          const x = list.find(y => y && String(y.id) === String(rec.id)); if(!x) return false;
+          x.date = to;
+          if(tech){ x.technicianId = tech; if(Array.isArray(x.technicianIds)) x.technicianIds = [tech]; }
+          delete x.placeAfter;
+          if(!lsSet(kinds[k][0], list)){ showToast('Could not save — the phone is full'); return false; }
+          if(k === 'tk'){ try{ if(typeof tasks !== 'undefined') tasks = list; }catch(e){} }
+          queueOfficeWork(kinds[k][1], x.id, false);
+          try{ fieldNoteLocalChange(); }catch(e){}
+          return true;
+        }
+      }));
       if(!done){
         const bin = document.createElement('button');
         bin.type = 'button';
         bin.title = 'Take this ' + kinds[k][2] + ' off';
         bin.setAttribute('aria-label', bin.title);
-        bin.style.cssText = 'width:28px;height:28px;flex-shrink:0;border-radius:7px;border:1px solid #EFC0B4;background:#fff;color:var(--rust);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;';
-        bin.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>';
+        // The same bin as the WorkCenter's (Nov 1)
+        bin.style.cssText = 'display:inline-flex;cursor:pointer;';
+        bin.innerHTML = '<svg class="weir-bin" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         bin.addEventListener('click', async ()=>{
           const ok = await confirmDialog('Take this ' + kinds[k][2] + ' off ' + h.textContent + '? It comes off the route too.', 'Take off');
           if(!ok) return;
@@ -19801,6 +20383,11 @@ function acalDayWindow(on){
           if(!lsSet(kinds[k][0], list)) return;
           if(k === 'tk'){ try{ if(typeof tasks !== 'undefined') tasks = list; }catch(e){} }
           queueOfficeWork(kinds[k][1], rec.id, true);
+          // A Clean & refill taken off stays off (Nov 2): its drain says so
+          if(tag === 'cr' && rec.refillOf && Array.isArray(acalOffice.drainCalendar)){
+            const ent = acalOffice.drainCalendar.find(x => x && x.id === rec.refillOf);
+            if(ent && !ent.refillMade){ ent.refillMade = true; try{ await acalPushOffice('drain_entry', ent); }catch(e){} }
+          }
           try{ fieldNoteLocalChange(); }catch(e){}
           acalDraw();
           showToast('Taken off');
@@ -19812,8 +20399,164 @@ function acalDayWindow(on){
   });
   return sheet;
 }
+// ---------- The month picker, as a window (Nov 1) ----------
+// The calendar icon by the month's name: a window with the year and its
+// twelve months. The month on screen is dark; this month is light teal when
+// you're looking at another one. Back to this month jumps straight there.
+function monthPickWindow(viewMonth, onPick, BTN){
+  const now = new Date();
+  const thisYear = now.getFullYear(), thisMon = now.getMonth() + 1;
+  const [vy, vm] = String(viewMonth).split('-').map(Number);
+  let year = vy || thisYear;
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const box = document.createElement('div');
+  box.className = 'confirm-box';
+  box.style.cssText = 'max-width:360px;width:100%;text-align:left;';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  const mk = (text, cls, css)=>{ const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ' + cls; b.style.cssText = css; b.textContent = text; return b; };
+  function drawWin(){
+    box.innerHTML = '';
+    const top = document.createElement('div');
+    top.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;';
+    const h = document.createElement('h3'); h.style.cssText = 'font-size:16px;margin:0;'; h.textContent = 'Go to a month';
+    const x = mk('Close', 'btn-ghost', 'width:auto;flex:0 0 auto;padding:5px 12px;font-size:12.5px;');
+    x.addEventListener('click', close);
+    top.appendChild(h); top.appendChild(x); box.appendChild(top);
+    const yr = document.createElement('div');
+    yr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+    const yP = mk('\u2039', 'btn-ghost', 'width:40px;flex:0 0 40px;padding:5px 0;');
+    const yN = mk('\u203a', 'btn-ghost', 'width:40px;flex:0 0 40px;padding:5px 0;');
+    const yL = document.createElement('b'); yL.style.cssText = 'font-size:16px;'; yL.textContent = String(year);
+    yP.addEventListener('click', ()=>{ year--; drawWin(); });
+    yN.addEventListener('click', ()=>{ year++; drawWin(); });
+    yr.appendChild(yP); yr.appendChild(yL); yr.appendChild(yN); box.appendChild(yr);
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:7px;';
+    for(let i = 0; i < 12; i++){
+      const viewing = year === vy && i + 1 === vm;
+      const current = year === thisYear && i + 1 === thisMon && !viewing;
+      const b = mk(new Date(2000, i, 1).toLocaleDateString(undefined, {month: 'short'}), viewing ? 'btn-primary' : 'btn-ghost',
+        'width:100%;padding:9px 0;font-size:' + BTN + 'px;' + (current ? 'background:var(--teal-pale);border-color:#9CC5BF;color:var(--ink);' : ''));
+      if(current) b.title = 'This month';
+      b.addEventListener('click', ()=>{ close(); onPick(year + '-' + String(i + 1).padStart(2, '0')); });
+      grid.appendChild(b);
+    }
+    box.appendChild(grid);
+    // Looking at another month: straight back to this one
+    if(!(vy === thisYear && vm === thisMon)){
+      const back = mk('Back to this month', 'btn-ghost', 'display:block;width:100%;margin-top:12px;');
+      back.addEventListener('click', ()=>{ close(); onPick(thisYear + '-' + String(thisMon).padStart(2, '0')); });
+      box.appendChild(back);
+    }
+  }
+  drawWin();
+}
+// ---------- Move a job to another day (Nov 1) ----------
+// As on the website: quick picks or any date, and the same technician or
+// another. opts: name, what, fromIso, techId, onMove(iso, techId) (true, or a
+// promise of true, when moved).
+function acalAddDays(iso, n){ const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function acalMoveDialog(opts){
+  const from = opts.fromIso;
+  const nice = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+  const short = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+  const curTech = String(opts.techId || '');
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const box = document.createElement('div');
+  box.className = 'confirm-box';
+  box.style.cssText = 'max-width:400px;width:100%;text-align:left;';
+  box.innerHTML = '<h3 style="font-size:17px;margin:0 0 4px;">Move to another day</h3>'
+    + '<p data-sub style="font-size:13px;color:var(--muted);margin:0 0 12px;"></p>'
+    + '<div data-chips style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>'
+    + '<div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:4px;">Or pick a date</div>'
+    + '<input type="date" data-date style="margin:0 0 12px;">'
+    + '<label data-keepwrap class="inline-check" style="display:flex;white-space:normal;font-size:14px;font-weight:600;margin:0 0 8px;gap:8px;"><input type="checkbox" data-keep checked style="width:20px;height:20px;margin:0;flex:0 0 auto;"> <span data-keepword></span></label>'
+    + '<select data-tech style="display:none;margin:0 0 8px;"></select>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;"><button type="button" class="btn btn-ghost" data-cancel style="flex:1 1 0;">Cancel</button><button type="button" class="btn btn-primary" data-go style="flex:1 1 0;">Move</button></div>';
+  box.querySelector('[data-sub]').textContent = (opts.name || '') + ' \u00b7 ' + (opts.what || 'Job') + ' on ' + nice(from);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const dateEl = box.querySelector('[data-date]'), go = box.querySelector('[data-go]'), keep = box.querySelector('[data-keep]'), techSel = box.querySelector('[data-tech]');
+  dateEl.value = acalAddDays(from, 1);
+  const chips = [];
+  [['Tomorrow', 1], ['Next week', 7], ['In 2 weeks', 14]].forEach(([w, n])=>{
+    const ch = document.createElement('button');
+    ch.type = 'button'; ch.className = 'btn btn-ghost';
+    ch.style.cssText = 'width:auto;flex:0 0 auto;padding:7px 13px;font-size:13.5px;border-radius:999px;';
+    ch.textContent = w; ch.dataset.iso = acalAddDays(from, n);
+    ch.addEventListener('click', ()=>{ dateEl.value = ch.dataset.iso; upd(); });
+    box.querySelector('[data-chips]').appendChild(ch); chips.push(ch);
+  });
+  if(curTech) box.querySelector('[data-keepword]').textContent = 'Keep the same technician (' + acalTechName(curTech) + ')';
+  else { box.querySelector('[data-keepwrap]').style.display = 'none'; keep.checked = false; }
+  const none = document.createElement('option'); none.value = ''; none.textContent = curTech ? 'Pick a technician' : 'No technician';
+  techSel.appendChild(none);
+  techniciansInOrder().forEach(t => { if(t && t.id){ const o = document.createElement('option'); o.value = String(t.id); o.textContent = t.name || 'Technician'; techSel.appendChild(o); } });
+  techSel.value = curTech;
+  const upd = ()=>{
+    const v = dateEl.value;
+    go.textContent = v ? (v === from ? 'Same day' : 'Move to ' + short(v)) : 'Move';
+    go.disabled = !v || v === from; go.style.opacity = go.disabled ? '0.5' : '';
+    chips.forEach(ch=>{ const on = ch.dataset.iso === v; ch.style.background = on ? 'var(--teal-pale)' : ''; ch.style.borderColor = on ? '#9CC5BF' : ''; });
+    techSel.style.display = keep.checked ? 'none' : 'block';
+  };
+  dateEl.addEventListener('input', upd); dateEl.addEventListener('change', upd);
+  keep.addEventListener('change', ()=>{ if(!keep.checked && !techSel.value) techSel.value = curTech; upd(); });
+  upd();
+  box.querySelector('[data-cancel]').addEventListener('click', ()=> overlay.remove());
+  go.addEventListener('click', async ()=>{
+    const to = dateEl.value;
+    if(!to || to === from) return;
+    const tech = keep.checked ? curTech : techSel.value;
+    go.disabled = true; go.textContent = 'Moving\u2026';
+    let moved = false;
+    try{ moved = (await opts.onMove(to, tech)) !== false; }catch(e){ console.warn('move failed', e); }
+    overlay.remove();
+    if(!moved){ showToast('Couldn\u2019t move that \u2014 check the signal and try again'); return; }
+    acalDraw();
+    showToast((opts.name || 'Moved') + ' moved to ' + nice(to));
+  });
+}
 // + Job: the WorkCenter's own Work Order or Task form, with the day filled in
-function acalNewJob(kind, iso){
+// + Job's window (Nov 2): Work order, Task, Filter clean, Pool drain and
+// Clean & refill, each in its calendar color
+function acalJobWindow(iso){
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  const box = document.createElement('div');
+  box.className = 'confirm-box';
+  box.style.cssText = 'max-width:380px;width:100%;text-align:left;';
+  box.innerHTML = '<h3 style="font-size:17px;margin:0 0 2px;">Add a job</h3><p data-day style="font-size:13px;color:var(--muted);margin:0 0 12px;"></p>';
+  box.querySelector('[data-day]').textContent = new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
+  const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  [['wo', 'Work order'], ['tk', 'Task'], ['fc', 'Filter clean'], ['pd', 'Pool drain'], ['cr', 'Clean & refill']].forEach(([k, label])=>{
+    const it = document.createElement('div');
+    it.className = 'press-row';
+    it.style.cssText = 'display:flex;align-items:center;gap:12px;padding:13px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;font-size:15.5px;font-weight:600;cursor:pointer;';
+    it.innerHTML = "<span style=\"font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;width:34px;text-align:center;padding:4px 0;border-radius:6px;background:" + ACAL_TAGS[k][2] + ';color:' + ACAL_TAGS[k][3] + ';">' + ACAL_TAGS[k][0] + '</span>'
+      + '<span style="flex:1;"></span><span style="color:var(--muted);font-size:20px;">\u203a</span>';
+    it.children[1].textContent = label;
+    it.addEventListener('click', ()=>{
+      shut();
+      if(k === 'fc' || k === 'pd'){ acalDraw(); acalAddFcPd(k, iso); }
+      else if(k === 'cr') acalNewJob('Task', iso, 'Clean & refill');
+      else acalNewJob(k === 'wo' ? 'Work Order' : 'Task', iso);
+    });
+    box.appendChild(it);
+  });
+  const cancel = document.createElement('button');
+  cancel.type = 'button'; cancel.className = 'btn btn-ghost'; cancel.style.cssText = 'width:100%;margin-top:4px;';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', shut);
+  box.appendChild(cancel);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+function acalNewJob(kind, iso, title){
   switchView('customers');
   showCustomerPane('work');
   awcKind = kind; awcView = 'main'; awcApply();
@@ -19822,6 +20565,9 @@ function acalNewJob(kind, iso){
   setTimeout(()=>{
     const d = document.getElementById(kind === 'Task' ? 'awcTaskDate' : 'awcWoDate');
     if(d){ d.value = iso; d.dispatchEvent(new Event('change', {bubbles: true})); }
+    // Clean & refill (Nov 2): the task's title filled in, so it shows as CR
+    const t = document.getElementById('awcTaskTitle');
+    if(title && kind === 'Task' && t){ t.value = title; t.dispatchEvent(new Event('input', {bubbles: true})); }
     window.scrollTo(0, 0);
   }, 50);
 }
@@ -22974,13 +23720,18 @@ function buildJobEmailHtml(customer, job, techName){
     (job.lineItems || []).filter(li => li && String(li.description || '').trim()).forEach(li=>{
       const qty = Number(li.qty) || 1, price = Number(li.price) || 0;
       total += qty * price;
-      rows += '<tr><td style="' + cell + '">' + esc(li.description) + (qty !== 1 ? ' \u00d7 ' + qty : '') + '</td>'
+      rows += '<tr><td style="' + cell + '">' + esc(li.description) + (qty !== 1 ? ' \u00d7 ' + qty : '')
+        + (li.detail ? '<div style="font-size:12.5px;color:#6B7B79;margin-top:2px;">' + esc(li.detail) + '</div>' : '') + '</td>'
         + '<td style="' + cell + 'text-align:right;">' + (withPrices ? '$' + (qty * price).toFixed(2) : '') + '</td></tr>';
     });
     if(rows && withPrices) rows += '<tr><td style="padding:7px 0;font-weight:700;color:#16302E;">Total</td>'
       + '<td style="padding:7px 0;text-align:right;font-weight:700;color:#16302E;">$' + total.toFixed(2) + '</td></tr>';
   } else {
     rows = '<tr><td style="' + cell + '">' + esc(what) + '</td><td style="' + cell + '"></td></tr>';
+    // A drain: the autofill valve and pump checks (Nov 1)
+    if(job.kind === 'pool drain') (job.doneExtraWork || []).filter(t => DRAIN_CHECKS.indexOf(t) !== -1).forEach(t=>{
+      rows += '<tr><td style="' + cell + '">' + esc(t) + '</td><td style="' + cell + 'text-align:right;color:#2E8B57;font-weight:700;">\u2713</td></tr>';
+    });
   }
   const contact = b.showContact ? emailContactLine() : '';
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'
@@ -23424,7 +24175,7 @@ async function adminVersion_attemptAutoSend(customerId, type, manual){
       }
     }catch(err){
       if(err && err.name === 'AbortError'){
-        showToast('Send cancelled — report is ready below whenever you want it');
+        showToast('Send canceled — report is ready below whenever you want it');
         return;
       }
       // fall through to mailto below on other errors
@@ -23545,7 +24296,7 @@ async function techVersion_attemptAutoSend(customerId, type, manual){
       }
     }catch(err){
       if(err && err.name === 'AbortError'){
-        showToast('Send cancelled — report is ready below whenever you want it');
+        showToast('Send canceled — report is ready below whenever you want it');
         return;
       }
       // fall through to mailto below on other errors
@@ -25233,6 +25984,41 @@ function custNameLineHtml(c, justToday){
     + (justToday ? '<span style="flex:0 0 auto;background:var(--gold);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap;">JUST TODAY</span>' : '')
     + '</div>';
 }
+// Nov 1: anywhere in the app, a line cut off with dots slides the same way:
+// job rows on Technicians and Today, addresses, the drop-downs, lists in
+// windows. Checked shortly after anything on the page changes, after a press,
+// when the phone turns, and on coming back to the app. A line only moves while
+// it doesn't fit.
+(function slideCutTextEverywhere(){
+  let queued = false;
+  const pass = ()=>{
+    queued = false;
+    document.querySelectorAll('[style*="ellipsis"]').forEach(el=>{
+      try{
+        if(!el.clientWidth || !el.getClientRects().length) return;      // not on screen
+        if(el.matches('input, textarea, select') || el.querySelector('input, textarea, select, button')) return;
+        const inner = el.querySelector(':scope > .marquee-inner');
+        const w = inner ? inner.scrollWidth : el.scrollWidth;
+        const sig = el.clientWidth + ':' + w + ':' + (el.textContent || '').length;
+        if(el.dataset.mqSig === sig) return;                            // nothing changed
+        el.dataset.mqSig = sig;
+        if(w > el.clientWidth + 1 || el.classList.contains('marquee-on')){
+          el.classList.add('mq-auto');
+          marqueeIfCut(el);
+        }
+      }catch(e){}
+    });
+  };
+  const queue = ()=>{ if(!queued){ queued = true; setTimeout(pass, 150); } };
+  const start = ()=>{
+    try{ new MutationObserver(queue).observe(document.body, {childList: true, subtree: true, characterData: true}); }catch(e){}
+    queue();
+  };
+  if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  window.addEventListener('resize', queue);
+  document.addEventListener('click', ()=> setTimeout(queue, 60), true);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) queue(); });
+})();
 function marqueeIfCut(el){
   if(!el) return;
   let inner = el.querySelector(':scope > .marquee-inner');
@@ -25254,6 +26040,224 @@ function marqueeIfCut(el){
     }
   });
 }
+
+// Colour-blind mode switch in Settings (Nov 1), with its colours shown under it
+(function colourBlindSetting(){
+  const box = document.getElementById('settingColourBlind');
+  if(!box) return;
+  box.checked = CB_ON;
+  box.addEventListener('change', ()=>{ try{ showToast(box.checked ? 'Color-blind mode on' : 'Color-blind mode off'); }catch(e){} setColourBlind(box.checked); });
+  const key = document.getElementById('colourBlindKey');
+  if(key) [['FC', 'Filter clean'], ['PD', 'Pool drain'], ['CR', 'Clean & refill'], ['WO', 'Work order'], ['TK', 'Task']].forEach(([t, w])=>{
+    const c = CB_JOB[t];
+    const s = document.createElement('span');
+    s.style.cssText = 'font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;background:' + c[0] + ';color:' + c[1] + ';';
+    s.textContent = w;
+    key.appendChild(s);
+  });
+})();
+
+// ---------- Our own little calendar for date boxes (Nov 1) ----------
+// The browser's own calendar filled in the 1st of each month as you moved
+// between months, and anything watching the box acted on it. This one only
+// picks a date when a day is pressed. On a computer (a mouse), the calendar
+// icon in every date box opens it, and so does anything that asked for the
+// browser's calendar. Phones keep their own date picker. Typing a date into
+// the box works as before.
+(function weirDatePopup(){
+  let fine = false;
+  try{ fine = window.matchMedia('(pointer: fine)').matches; }catch(e){}
+  if(!fine) return;
+  const css = document.createElement('style');
+  css.textContent = 'input[type=date]::-webkit-calendar-picker-indicator{pointer-events:none;}'
+    + '.weir-datepop{position:fixed;z-index:2147483000;width:252px;background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;'
+    + 'box-shadow:0 12px 30px rgba(14,74,77,.22);padding:10px;font-family:Inter,system-ui,sans-serif;color:var(--ink);user-select:none;}'
+    + '.weir-datepop .dp-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}'
+    + '.weir-datepop .dp-head b{flex:1;text-align:center;font-size:14px;}'
+    + '.weir-datepop button{all:unset;box-sizing:border-box;cursor:pointer;text-align:center;}'
+    + '.weir-datepop .dp-arrow{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);font-size:17px;line-height:28px;}'
+    + '.weir-datepop .dp-arrow:hover{background:var(--teal-pale);}'
+    + '.weir-datepop .dp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}'
+    + '.weir-datepop .dp-wd{font-size:10.5px;font-weight:700;color:var(--muted);text-align:center;padding:3px 0;}'
+    + '.weir-datepop .dp-day{height:31px;border-radius:8px;font-size:13px;line-height:31px;}'
+    + '.weir-datepop .dp-day:hover{background:var(--teal-pale);}'
+    + '.weir-datepop .dp-day.today{box-shadow:inset 0 0 0 1.5px var(--teal-deep);font-weight:700;}'
+    + '.weir-datepop .dp-day.on{background:var(--teal-deep);color:#fff;font-weight:700;}'
+    + '.weir-datepop .dp-day.off{color:#C2CFCC;cursor:default;background:none;}'
+    + '.weir-datepop .dp-foot{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);}'
+    + '.weir-datepop .dp-link{font-size:12.5px;font-weight:700;color:var(--teal-deep);padding:4px 6px;border-radius:6px;}'
+    + '.weir-datepop .dp-link:hover{background:var(--teal-pale);}';
+  (document.head || document.documentElement).appendChild(css);
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  let pop = null, forInput = null, swallow = false;
+  const close = ()=>{ if(pop){ pop.remove(); pop = null; forInput = null; } };
+  window.weirCloseDatePopup = close;
+  function open(input){
+    close();
+    forInput = input;
+    const val = /^\d{4}-\d{2}-\d{2}$/.test(input.value) ? input.value : '';
+    const start = val ? new Date(val + 'T12:00:00') : new Date();
+    let y = start.getFullYear(), m = start.getMonth();
+    pop = document.createElement('div');
+    pop.className = 'weir-datepop';
+    const draw = ()=>{
+      const today = iso(new Date());
+      const min = input.min || '', max = input.max || '';
+      pop.innerHTML = '';
+      const head = document.createElement('div'); head.className = 'dp-head';
+      const arrow = (t, d, label)=>{
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'dp-arrow'; b.textContent = t; b.setAttribute('aria-label', label);
+        // Moving between months picks nothing
+        b.addEventListener('click', e=>{ e.stopPropagation(); m += d; if(m < 0){ m = 11; y--; } if(m > 11){ m = 0; y++; } draw(); });
+        return b;
+      };
+      const title = document.createElement('b');
+      title.textContent = new Date(y, m, 1).toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+      head.appendChild(arrow('‹', -1, 'Previous month')); head.appendChild(title); head.appendChild(arrow('›', 1, 'Next month'));
+      pop.appendChild(head);
+      const grid = document.createElement('div'); grid.className = 'dp-grid';
+      ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(w=>{ const c = document.createElement('div'); c.className = 'dp-wd'; c.textContent = w; grid.appendChild(c); });
+      const first = new Date(y, m, 1).getDay();
+      for(let i = 0; i < first; i++) grid.appendChild(document.createElement('div'));
+      const days = new Date(y, m + 1, 0).getDate();
+      for(let d = 1; d <= days; d++){
+        const day = y + '-' + pad(m + 1) + '-' + pad(d);
+        const b = document.createElement('button'); b.type = 'button';
+        const off = (min && day < min) || (max && day > max);
+        b.className = 'dp-day' + (day === today ? ' today' : '') + (day === input.value ? ' on' : '') + (off ? ' off' : '');
+        b.textContent = d;
+        if(!off) b.addEventListener('click', e=>{ e.stopPropagation(); pick(day); });
+        grid.appendChild(b);
+      }
+      pop.appendChild(grid);
+      const foot = document.createElement('div'); foot.className = 'dp-foot';
+      const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'dp-link'; clear.textContent = 'Clear';
+      clear.addEventListener('click', e=>{ e.stopPropagation(); pick(''); });
+      const now = document.createElement('button'); now.type = 'button'; now.className = 'dp-link'; now.textContent = 'Today';
+      const tOff = (min && today < min) || (max && today > max);
+      if(tOff) now.style.visibility = 'hidden';
+      now.addEventListener('click', e=>{ e.stopPropagation(); if(!tOff) pick(today); });
+      if(input.required) clear.style.visibility = 'hidden';
+      foot.appendChild(clear); foot.appendChild(now);
+      pop.appendChild(foot);
+    };
+    const pick = v=>{
+      const inp = forInput;
+      close();
+      if(!inp) return;
+      if(inp.value !== v){
+        inp.value = v;
+        inp.dispatchEvent(new Event('input', {bubbles: true}));
+        inp.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+      // (Not focused afterwards: a date box emptied on focus, ready to type)
+    };
+    draw();
+    document.body.appendChild(pop);
+    // Under the box, kept on screen; above it when there's no room below
+    const r = input.getBoundingClientRect();
+    const h = pop.offsetHeight, w = pop.offsetWidth;
+    let top = r.bottom + 6;
+    if(top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    pop.style.top = top + 'px';
+    pop.style.left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8) + 'px';
+  }
+  window.weirOpenDatePopup = open;
+  // The calendar icon: the right-hand end of a date box
+  const onIcon = (input, e)=>{
+    const r = input.getBoundingClientRect();
+    return e.clientX >= r.right - 34 && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  };
+  document.addEventListener('mousedown', e=>{
+    const t = e.target;
+    if(pop && !pop.contains(t)){
+      const sameBox = t === forInput && onIcon(t, e);
+      close();
+      // That press only closes the calendar, not a window behind it
+      if(!sameBox && !(t && t.matches && t.matches('input[type=date]'))) swallow = true;
+      if(sameBox){ e.preventDefault(); swallow = true; return; }
+    }
+    if(t && t.matches && t.matches('input[type=date]') && !t.disabled && !t.readOnly && onIcon(t, e)){
+      e.preventDefault();
+      open(t);
+    }
+  }, true);
+  document.addEventListener('click', e=>{
+    if(swallow){ swallow = false; if(!(e.target && e.target.matches && e.target.matches('input[type=date]'))){ e.stopPropagation(); e.preventDefault(); } return; }
+    // The browser's own calendar never opens from a click on the icon
+    if(e.target && e.target.matches && e.target.matches('input[type=date]') && onIcon(e.target, e)) e.preventDefault();
+  }, true);
+  document.addEventListener('keydown', e=>{ if(pop && e.key === 'Escape'){ e.stopPropagation(); close(); } }, true);
+  window.addEventListener('resize', close);
+  document.addEventListener('scroll', e=>{ if(pop && !pop.contains(e.target)) close(); }, true);
+  // Code that asked for the browser's calendar gets this one
+  try{
+    const orig = HTMLInputElement.prototype.showPicker;
+    HTMLInputElement.prototype.showPicker = function(){
+      if(this.type === 'date'){ open(this); return; }
+      if(orig) return orig.apply(this, arguments);
+    };
+  }catch(e){}
+})();
+
+// ---------- Taps with wet fingers (Nov 2) ----------
+// A wet fingertip often slides a little or smudges, and the phone then treats
+// the touch as the start of a scroll and drops the tap, so the button never
+// hears it. Here a touch that lifts close to where it started, quickly, with
+// nothing scrolled, still presses what was under the finger, if the phone
+// didn't press it itself. Real scrolls, drags and long presses are left alone.
+(function wetFingerTaps(){
+  const PRESSABLE = 'button, a[href], label, .press-row, .tab, .cust-row, .route-job, .rp-gap, .awc-pick-row, [role="button"], input[type="checkbox"], input[type="radio"], summary';
+  const SKIP = 'input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable="true"], .route-grip, [data-no-wet-tap]';
+  const SLIDE = 24;          // how far the finger may slide, in screen points
+  const QUICK = 700;         // a longer press is a hold, not a tap
+  let t = null;
+  const scrollers = el=>{
+    const out = [];
+    for(let n = el; n && n !== document.body; n = n.parentElement){
+      if(n.scrollHeight > n.clientHeight + 1 || n.scrollWidth > n.clientWidth + 1) out.push([n, n.scrollTop, n.scrollLeft]);
+    }
+    return out;
+  };
+  document.addEventListener('touchstart', e=>{
+    t = null;
+    if(!e.touches || e.touches.length !== 1) return;
+    const target = e.target;
+    if(!target || !target.closest || target.closest(SKIP)) return;
+    const el = target.closest(PRESSABLE);
+    if(!el || el.disabled) return;
+    const p = e.touches[0];
+    t = {el: el, x: p.clientX, y: p.clientY, at: Date.now(), sy: window.scrollY, sx: window.scrollX, boxes: scrollers(target), pressed: false};
+  }, {capture: true, passive: true});
+  document.addEventListener('touchmove', e=>{
+    if(!t || !e.touches || e.touches.length !== 1) return;
+    const p = e.touches[0];
+    if(Math.abs(p.clientX - t.x) > SLIDE || Math.abs(p.clientY - t.y) > SLIDE) t = null;   // a real swipe or scroll
+  }, {capture: true, passive: true});
+  document.addEventListener('touchcancel', ()=>{ /* the phone gave up on it: the lift decides */ }, {capture: true, passive: true});
+  // The phone pressed it itself: nothing for us to do
+  document.addEventListener('click', e=>{
+    if(t && !t.synthetic && e.isTrusted && (t.el === e.target || t.el.contains(e.target) || (e.target.contains && e.target.contains(t.el)))) t.pressed = true;
+  }, true);
+  document.addEventListener('touchend', e=>{
+    const s = t;
+    if(!s) return;
+    const p = e.changedTouches && e.changedTouches[0];
+    if(!p) return;
+    const moved = Math.max(Math.abs(p.clientX - s.x), Math.abs(p.clientY - s.y));
+    if(moved > SLIDE || Date.now() - s.at > QUICK) return;
+    // Anything scrolled at all: that was a scroll
+    if(Math.abs(window.scrollY - s.sy) > 1 || Math.abs(window.scrollX - s.sx) > 1) return;
+    if(s.boxes.some(([n, top, left]) => Math.abs(n.scrollTop - top) > 1 || Math.abs(n.scrollLeft - left) > 1)) return;
+    // Give the phone its moment to press it the normal way first
+    setTimeout(()=>{
+      if(s.pressed || t !== s || !s.el.isConnected || s.el.disabled) return;
+      s.synthetic = true;
+      try{ s.el.click(); }catch(err){}
+    }, 260);
+  }, {capture: true, passive: true});
+})();
 </script>
 </body>
 </html>

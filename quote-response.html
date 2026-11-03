@@ -42,6 +42,39 @@
             font:inherit;font-size:15px;font-weight:700;cursor:pointer !important;}
   .msg-send:disabled{opacity:.6;}
   .msg-need{display:none;margin-top:8px;font-size:13px;font-weight:700;color:var(--rust);text-align:left;}
+  /* The quote, in the email's own look, after Approve / Decline (Nov 1) */
+  .card.qv{max-width:520px;padding:0;text-align:left;overflow:hidden;}
+  .qv-band{padding:20px 24px;color:#fff;font-size:18px;font-weight:700;}
+  .qv-saved{display:flex;align-items:center;gap:8px;padding:11px 24px;font-size:14px;font-weight:700;background:#E3F2E8;color:#2E6B47;}
+  .qv-saved.no{background:#FBEAE4;color:var(--rust);}
+  .qv-saved.err{background:#FBF4E4;color:#8A6410;}
+  .qv-top{padding:20px 24px 0;}
+  .qv-kind{font-size:12px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:.06em;}
+  .qv-kind b{font-size:21px;color:#0E4A4D;text-transform:none;letter-spacing:-.01em;margin-left:8px;vertical-align:middle;}
+  .qv-kind b i{font-style:normal;color:#A9BCB9;font-weight:500;}
+  .qv-who{font-size:17px;font-weight:700;color:#16302E;margin-top:6px;}
+  .qv-sub{font-size:13.5px;color:#6B7B79;margin-top:2px;}
+  .qv-items{padding:16px 24px 0;}
+  .qv-hd{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #E6E9E8;padding:6px 0;}
+  .qv-line{display:flex;gap:12px;border-bottom:1px solid #E6E9E8;padding:11px 0;font-size:15px;color:#16302E;}
+  .qv-line .n{flex:1;min-width:0;}
+  .qv-line .q{color:#6B7B79;font-size:13px;}
+  .qv-line .a{font-weight:700;white-space:nowrap;}
+  .qv-tot{display:flex;justify-content:space-between;padding:12px 0 0;font-size:15px;font-weight:700;color:#16302E;}
+  .qv-tot .v{font-size:18px;}
+  .qv-notes{padding:16px 24px 0;font-size:14px;color:#4A5A58;white-space:pre-wrap;line-height:1.5;}
+  .qv-notes b{display:block;font-size:12px;color:#0F766E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+  .qv-foot{padding:18px 24px 24px;}
+  .qv-stamp{text-align:center;margin:0 0 14px;}
+  .qv-stamp span{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:999px;font-size:14px;font-weight:700;animation:pop .4s cubic-bezier(.2,1.4,.4,1) both;}
+  .qv-btns{display:flex;gap:10px;}
+  .qv-btn{flex:1;padding:14px 8px;border:0;border-radius:11px;color:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer !important;transition:opacity .2s,box-shadow .2s,transform .12s;}
+  .qv-btn:active{transform:scale(.97);}
+  .qv-btn.dim{opacity:.4;}
+  .qv-btn.on{box-shadow:0 0 0 3px rgba(0,0,0,.12);}
+  .qv-btn:disabled{cursor:default !important;}
+  .qv-note{margin-top:12px;font-size:13px;color:#6B7B79;text-align:center;}
+  .qv-company{margin-top:18px;text-align:center;font-size:13px;color:#8A9A98;}
   .wait .badge path{display:none;}
   .wait .badge{animation:pulse 1.2s ease-in-out infinite;}
   @keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
@@ -60,6 +93,12 @@
   <div class="foot" id="foot"></div>
 </div>
 <script>
+// The public keys, the same ones the website uses (safe to show; the server's
+// rules decide what they can read)
+const QR_KEYS = {
+  'myxxahrlmzvrbcmopwyo.supabase.co': 'sb_publishable_32m_kcK3pQpClCGAvAAogg_Ut9RBFS1',
+  'mjjgvpejbibybhsmrdno.supabase.co': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qamd2cGVqYmlieWJoc21yZG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTIyNzgsImV4cCI6MjEwNTY2ODI3OH0.fC627DhuydW81Bie_abdlWTZ-FykNHZUMVd9RrFJSJg'
+  };
 (function(){
   const q = new URLSearchParams(location.search);
   const token = q.get('t') || '';
@@ -108,10 +147,12 @@
     .then(r => r.json())
     .then(res=>{
       if(res.state === 'recorded'){
-        const who = res.company || 'We';
-        done('Thank you for your response!',
-             (res.company ? who + ' has' : 'We have') + ' your answer and will be in touch soon.',
+        // The quote itself, in the email's look, with the answer filled in
+        // (Nov 1); the plain thank-you if its breakdown can't be had
+        const thanks = ()=> done('Thank you for your response!',
+             (res.company ? res.company + ' has' : 'We have') + ' your answer and will be in touch soon.',
              res.outcome, res.company);
+        showQuote(server, token, fn, res.outcome, res.company).then(ok => { if(!ok) thanks(); }).catch(thanks);
       } else if(res.state === 'expired'){
         done('This quote has expired',
              'It was sent more than ' + (res.days || 30) + ' days ago. Please contact ' + (res.company || 'us') + ' for an updated quote.',
@@ -130,6 +171,115 @@
     });
   send(2);
 })();
+
+
+
+// ---------- The quote, answered (Nov 1) ----------
+// After Approve or Decline in the email: the quote laid out as the
+// email has it (the company's colour, the number, the items and total), the
+// answer saved and shown in green or red, and both buttons here to change it
+// until the quote expires. The breakdown comes from the quote's code (snippet
+// 34), the same way Download quote gets it.
+function showQuote(server, token, fn, outcome, company){
+  let host = '', key = '';
+  try{
+    const u = new URL(server);
+    if(u.protocol === 'https:' && /\.supabase\.co$/.test(u.hostname)){ host = u.origin; key = QR_KEYS[u.hostname] || ''; }
+  }catch(e){}
+  if(!host || !key) return Promise.resolve(false);
+  return fetch(host + '/rest/v1/rpc/quote_download', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', apikey: key, Authorization: 'Bearer ' + key},
+    body: JSON.stringify({p_token: token})
+  }).then(r => r.ok ? r.json() : null).then(d=>{
+    if(!d || typeof d !== 'object' || !Array.isArray(d.items) || !d.items.length) return false;
+    drawQuote(d, token, fn, outcome, company || (d.company && d.company.name) || d.companyName || '');
+    return true;
+  });
+}
+function drawQuote(d, token, fn, outcome, company){
+  const card = document.getElementById('card');
+  const el = (tag, cls, text)=>{ const x = document.createElement(tag); if(cls) x.className = cls; if(text !== undefined) x.textContent = text; return x; };
+  const money = n => '$' + (Number(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const colour = /^#[0-9a-f]{6}$/i.test(String(d.colour || '')) ? d.colour : '#134E4A';
+  document.title = (d.type || 'Quote') + (d.number ? ' #' + d.number : '');
+  card.className = 'card qv';
+  card.innerHTML = '';
+  card.appendChild(el('div', 'qv-band', company || 'Your quote')).style.background = colour;
+  const saved = el('div', 'qv-saved');
+  card.appendChild(saved);
+  const top = el('div', 'qv-top');
+  const kind = el('div', 'qv-kind', d.type || 'Quote');
+  if(d.number){ const b = el('b'); b.appendChild(el('i', '', '#')); b.appendChild(document.createTextNode(d.number)); kind.appendChild(b); }
+  top.appendChild(kind);
+  if(d.customer && d.customer.name) top.appendChild(el('div', 'qv-who', d.customer.name));
+  if(d.customer && d.customer.address) top.appendChild(el('div', 'qv-sub', d.customer.address));
+  if(d.date) top.appendChild(el('div', 'qv-sub', d.date));
+  card.appendChild(top);
+  const items = el('div', 'qv-items');
+  const hd = el('div', 'qv-hd'); hd.appendChild(el('span', '', 'Item')); hd.appendChild(el('span', '', 'Amount'));
+  items.appendChild(hd);
+  d.items.forEach(it=>{
+    const qty = Number(it.qty) || 0, price = Number(it.price) || 0;
+    const row = el('div', 'qv-line');
+    const n = el('span', 'n', it.description || 'Item');
+    if(qty !== 1) n.appendChild(el('span', 'q', '  \u00d7 ' + qty));
+    // The item's description (Nov 1)
+    if(it.detail){ const dd = el('div', '', String(it.detail)); dd.style.cssText = 'font-size:13px;color:#6B7B79;margin-top:3px;line-height:1.4;white-space:pre-wrap;'; n.appendChild(dd); }
+    row.appendChild(n);
+    row.appendChild(el('span', 'a', money(qty * price)));
+    items.appendChild(row);
+  });
+  const tot = el('div', 'qv-tot'); tot.appendChild(el('span', '', 'Total')); tot.appendChild(el('span', 'v', money(d.total)));
+  items.appendChild(tot);
+  card.appendChild(items);
+  if(String(d.notes || '').trim()){
+    const nt = el('div', 'qv-notes'); nt.appendChild(el('b', '', 'Notes')); nt.appendChild(document.createTextNode(String(d.notes).trim()));
+    card.appendChild(nt);
+  }
+  const foot = el('div', 'qv-foot');
+  const stamp = el('div', 'qv-stamp');
+  const btns = el('div', 'qv-btns');
+  const yes = el('button', 'qv-btn', 'Approve'); yes.type = 'button'; yes.style.background = colour;
+  const no = el('button', 'qv-btn', 'Decline'); no.type = 'button'; no.style.background = '#B8492E';
+  btns.appendChild(yes); btns.appendChild(no);
+  const note = el('div', 'qv-note', d.expiresOn ? 'You can change your answer until ' + d.expiresOn + '.' : 'You can change your answer any time before the quote expires.');
+  foot.appendChild(stamp); foot.appendChild(btns); foot.appendChild(note);
+  foot.appendChild(el('div', 'qv-company', company));
+  card.appendChild(foot);
+  const tick = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const paint = o=>{
+    const ok = o !== 'denied';
+    saved.className = 'qv-saved' + (ok ? '' : ' no');
+    saved.innerHTML = tick;
+    saved.appendChild(document.createTextNode('Saved \u2014 quote ' + (ok ? 'approved' : 'declined') + '. Thank you!'));
+    stamp.innerHTML = '';
+    const pill = el('span', '', ok ? '\u2713 Approved' : '\u2715 Declined');
+    pill.style.cssText = ok ? 'background:#E3F2E8;color:#2E6B47;' : 'background:#FBEAE4;color:#B8492E;';
+    stamp.appendChild(pill);
+    yes.className = 'qv-btn' + (ok ? ' on' : ' dim');
+    no.className = 'qv-btn' + (ok ? ' dim' : ' on');
+  };
+  const say = (text)=>{ saved.className = 'qv-saved err'; saved.textContent = text; };
+  let current = outcome === 'denied' ? 'denied' : 'approved';
+  paint(current);
+  const pick = a=>{
+    const want = a === 'deny' ? 'denied' : 'approved';
+    if(want === current) return;
+    yes.disabled = no.disabled = true;
+    fetch(fn, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({t: token, a: a})})
+      .then(r => r.json())
+      .then(r2=>{
+        if(r2.state === 'recorded'){ current = r2.outcome === 'denied' ? 'denied' : 'approved'; paint(current); }
+        else if(r2.state === 'expired') say('This quote has expired, so the answer can no longer be changed.');
+        else say('We couldn\u2019t save that just now. Please try again.');
+      })
+      .catch(()=> say('We couldn\u2019t reach our system. Check your connection and try again.'))
+      .then(()=>{ yes.disabled = no.disabled = false; });
+  };
+  yes.addEventListener('click', ()=> pick('approve'));
+  no.addEventListener('click', ()=> pick('deny'));
+}
 
 // ---------- Send a message (Oct 22) ----------
 // The email's Send a message button lands here: a box for the customer's
@@ -224,10 +374,7 @@ function downloadQuote(server, token){
   const $ = id => document.getElementById(id);
   // The public keys, the same ones the website uses (safe to show; the server's
   // rules decide what they can read)
-  const KEYS = {
-    'myxxahrlmzvrbcmopwyo.supabase.co': 'sb_publishable_32m_kcK3pQpClCGAvAAogg_Ut9RBFS1',
-    'mjjgvpejbibybhsmrdno.supabase.co': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qamd2cGVqYmlieWJoc21yZG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTIyNzgsImV4cCI6MjEwNTY2ODI3OH0.fC627DhuydW81Bie_abdlWTZ-FykNHZUMVd9RrFJSJg'
-  };
+  const KEYS = QR_KEYS;
   document.title = 'Your quote';
   $('title').textContent = 'One moment…';
   $('text').textContent = 'Getting your quote ready.';
@@ -361,10 +508,14 @@ function drawQuotePdf(d){
   d.items.forEach((it, i)=>{
     set(10.5, 'bold', ink);
     const desc = doc.splitTextToSize(String(it.description || ''), 300);
-    const h = 14 + desc.length * 13;
+    // The item's description under its name (Nov 1)
+    set(9.5, 'normal', muted);
+    const det = it.detail ? doc.splitTextToSize(String(it.detail), 300) : [];
+    const h = 14 + desc.length * 13 + (det.length ? 4 + det.length * 11.5 : 0);
     if(y + h > BOTTOM) y = nextPage();
     if(i % 2 === 1){ doc.setFillColor(247, 250, 249); doc.rect(L, y, R - L, h, 'F'); }
     set(10.5, 'bold', ink); doc.text(desc, L + 10, y + 17);
+    if(det.length){ set(9.5, 'normal', muted); doc.text(det, L + 10, y + 17 + desc.length * 13 + 2); }
     set(10.5, 'normal', soft);
     const qty = Number(it.qty) || 0, price = Number(it.price) || 0;
     doc.text(String(qty), cols.qty, y + 17, {align: 'center'});
