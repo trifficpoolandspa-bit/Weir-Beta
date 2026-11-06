@@ -1194,7 +1194,7 @@ textarea:not([readonly]),[contenteditable="true"],[contenteditable=""]{caret-col
       <div class="field" id="reportDateField">
         <label>Jump to a date</label>
         <div style="display:flex;align-items:center;gap:8px;">
-          <select id="reportReadingSelect" style="flex:1;padding-right:16px;"></select>
+          <select id="reportReadingSelect" style="flex:1 1 0;min-width:0;padding-right:16px;"><option value="">mm/dd/yyyy</option></select>
           <button type="button" id="btnReportDatePicker" title="Pick a date from the calendar"
             style="flex:0 0 44px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--teal-mid);border-radius:10px;background:var(--teal-pale);cursor:pointer;line-height:0;">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2" stroke-linecap="round">
@@ -3146,7 +3146,7 @@ function switchView(view, opts){
     if(clear) clear.style.display = 'none';
     // ...and the page back as it starts: no dates, no report, no buttons
     const dates = document.getElementById('reportReadingSelect');
-    if(dates) dates.innerHTML = '';
+    if(dates) dates.innerHTML = '<option value="">mm/dd/yyyy</option>';
     try{ availableReportDates = []; reportDateDays = []; }catch(e){}
     const out = document.getElementById('reportOutput');
     if(out) out.innerHTML = '';
@@ -4779,8 +4779,8 @@ const SYNC_WORK_SENDABLE = ['task', 'reschedule', 'work_order', 'filter_clean', 
 // doneDurationMs: how long the job took (Oct 10, snippet 32)
 // doneExtraWork: the extra work ticked off on a filter clean or pool drain (Oct 14, snippet 33)
 const SYNC_FILTER_CLEAN_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements', 'doneDurationMs', 'doneExtraWork'];
-const SYNC_TASK_FIELDS = ['done', 'doneAt', 'doneBy', 'doneNotes', 'doneVideo', 'doneVideoMore', 'doneDurationMs'];
-const SYNC_WORK_ORDER_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements', 'doneDurationMs'];
+const SYNC_TASK_FIELDS = ['done', 'doneAt', 'doneBy', 'doneNotes', 'doneVideo', 'doneVideoMore', 'doneDurationMs', 'doneExtraWork'];
+const SYNC_WORK_ORDER_FIELDS = ['status', 'doneAt', 'doneBy', 'doneNotes', 'donePhoto', 'doneVideo', 'donePhotoMore', 'doneVideoMore', 'doneReplacements', 'doneDurationMs', 'doneExtraWork'];
 
 // A work order submitted before its photo and video went to the office (Oct 3)
 // kept them only in this phone's submissions: hang them on the visit now, so
@@ -5317,14 +5317,19 @@ async function syncPushPhotos(state){
   const ph = syncPhotoState(state);
   const company = deviceGet('company');
   if(!company) return {ok: true, pushed: 0};
-  const waiting = syncPhotosHere().filter(p => !ph.sent[p.id]);
+  // A photo marked "gone" (its picture not found here) or "refused" is tried
+  // again once a day instead of being given up on for good: the picture can turn
+  // up later, and the customer can reach the office after the photo was refused.
+  // Ones marked before this change have no time on them, so they get one more go now.
+  const retryable = rec => !!(rec && (rec.gone || rec.refused) && Date.now() - new Date(rec.at || 0).getTime() > 20 * 3600000);
+  const waiting = syncPhotosHere().filter(p => !ph.sent[p.id] || retryable(ph.sent[p.id]));
   let pushed = 0, refused = 0;
   for(const item of waiting.slice(0, SYNC_PHOTOS_PER_RUN)){
     const data = await loadPhotoData(item.id);
-    if(!data){ ph.sent[item.id] = {gone: true}; saveFieldSyncState(state); continue; }
+    if(!data){ ph.sent[item.id] = {gone: true, at: new Date().toISOString()}; saveFieldSyncState(state); continue; }
     const path = company.id + '/' + item.customerId + '/' + item.id;
     let file;
-    try{ file = syncDataUrlToBlob(data); }catch(e){ ph.sent[item.id] = {gone: true}; continue; }
+    try{ file = syncDataUrlToBlob(data); }catch(e){ ph.sent[item.id] = {gone: true, at: new Date().toISOString()}; continue; }
 
     const s = deviceGet('session');
     let res;
@@ -5376,7 +5381,7 @@ async function syncPushPhotos(state){
     if(noted.offline) return {ok: false, offline: true, pushed: pushed};
     if(noted.status === 400 || noted.status === 403){
       // The office will not have it — a customer it does not know, say
-      ph.sent[item.id] = {refused: true};
+      ph.sent[item.id] = {refused: true, at: new Date().toISOString()};
       refused++;
       saveFieldSyncState(state);
       continue;
@@ -6166,6 +6171,8 @@ function photoStepState(step){
 function photoEveryoneOn(step, key){
   const saved = lsGet('photoEveryone');
   const all = saved && typeof saved === 'object' ? saved : {after: {pool: true}};
+  // Skipping a service or job needs a photo and note unless the office turned it off
+  if(step === 'skipjob') return !(all.skipjob && all.skipjob.skipjob === false);
   return !!(all[step] && all[step][key] === true);
 }
 
@@ -9534,11 +9541,11 @@ function techRouteJobsFor(techId, iso){
   });
   (lsGet('scheduledFilterCleans') || []).filter(f => f && f.date === iso && mine(f) && !f.reopened).forEach(f=>{
     out.push({kind: 'filter clean', id: f.id, key: 'filter clean:' + f.id, report: 'fc:' + f.id, title: 'Filter clean', customerId: f.customerId,
-      done: f.status === 'done', doneAt: f.doneAt, date: f.date, technicianId: f.technicianId});
+      done: f.status === 'done', doneAt: f.doneAt, date: f.date, technicianId: f.technicianId, placeAfter: f.placeAfter});
   });
   (lsGet('scheduledPoolDrains') || []).filter(f => f && f.date === iso && mine(f) && !f.reopened).forEach(f=>{
     out.push({kind: 'pool drain', id: f.id, key: 'pool drain:' + f.id, report: 'pd:' + f.id, title: drainTitle(f), customerId: f.customerId,
-      done: f.status === 'done', doneAt: f.doneAt, date: f.date, technicianId: f.technicianId});
+      done: f.status === 'done', doneAt: f.doneAt, date: f.date, technicianId: f.technicianId, placeAfter: f.placeAfter});
   });
   (lsGet('tasks') || []).filter(t => t && t.date === iso && mine(t) && !t.held && !t.reopened).forEach(t=>{
     const ids = (t.customerIds || []).length ? t.customerIds : [''];
@@ -10155,7 +10162,7 @@ function saveMoveJustOnce(customerId, fromISO, toISO, techId){
     && (r.fromDate === fromISO || r.toDate === fromISO || r.fromDate === origin)));
   const home = toISO === origin && !techId;
   if(!home){
-    const move = {id: 'resched_' + Date.now(), customerId: customerId, fromDate: origin, toDate: toISO,
+    const move = {id: 'resched_' + Date.now() + '_' + String(customerId).slice(-6), customerId: customerId, fromDate: origin, toDate: toISO,
       createdAt: new Date().toISOString()};
     if(techId) move.technicianId = techId;
     list.push(move);
@@ -10934,15 +10941,15 @@ function routeJobsFor(customerId, dayISO, techId){
     .filter(t => !t.done && !t.held && t.date === dayISO && mine(t))   // not one held off the app (Oct 19)
     .filter(t => (t.customerIds || []).indexOf(customerId) !== -1 || t.customerId === customerId)
     .map(t => ({key: 'task:' + t.id + ':' + customerId, kind: 'task', id: t.id, placeAfter: t.placeAfter,
-                title: t.title || 'Task', details: t.details || '', photoRequired: !!t.photoRequired, videoRequired: !!t.videoRequired}));
+                title: t.title || 'Task', details: t.details || '', extraWork: t.extraWork || [], photoRequired: !!t.photoRequired, videoRequired: !!t.videoRequired}));
   const orders = (lsGet('scheduledWorkOrders') || [])
     .filter(j => j.status === 'scheduled' && !j.held && j.date === dayISO && j.customerId === customerId && mine(j))
     .map(j => ({key: 'work order:' + j.id, kind: 'work order', id: j.id, lineItems: j.lineItems || [], placeAfter: j.placeAfter,
-                title: j.title || 'Work order', details: j.notes || '', photoRequired: !!j.photoRequired, videoRequired: !!j.videoRequired}));
+                title: j.title || 'Work order', details: j.notes || '', extraWork: j.extraWork || [], photoRequired: !!j.photoRequired, videoRequired: !!j.videoRequired}));
   // Filter cleans are jobs too, done on the job screen (Oct 3)
   const cleans = (lsGet('scheduledFilterCleans') || [])
     .filter(s => s && s.status === 'scheduled' && s.date === dayISO && s.customerId === customerId && mine(s))
-    .map(s => ({key: 'filter clean:' + s.id, kind: 'filter clean', id: s.id,
+    .map(s => ({key: 'filter clean:' + s.id, kind: 'filter clean', id: s.id, placeAfter: s.placeAfter,
                 // Only when the group's Photo required was ticked (Oct 3)
                 title: 'Filter clean', details: '', photoRequired: s.photoRequired === true, videoRequired: false,
                 // Extra work the office added on the calendar's day window (Oct 13)
@@ -10950,7 +10957,7 @@ function routeJobsFor(customerId, dayISO, techId){
   // Pool drains, sent from the website's Pool drains page (Oct 10)
   const drains = (lsGet('scheduledPoolDrains') || [])
     .filter(s => s && s.status === 'scheduled' && s.date === dayISO && s.customerId === customerId && mine(s))
-    .map(s => ({key: 'pool drain:' + s.id, kind: 'pool drain', id: s.id,
+    .map(s => ({key: 'pool drain:' + s.id, kind: 'pool drain', id: s.id, placeAfter: s.placeAfter,
                 title: drainTitle(s), details: s.notes || '', photoRequired: s.photoRequired === true, videoRequired: false,
                 // Extra work the office added on the drain calendar, ticked off like a work order's items (Oct 13)
                 lineItems: Array.isArray(s.lineItems) ? s.lineItems : []}));
@@ -11083,7 +11090,7 @@ function routeLooseTasks(dayISO, techId){
   return (lsGet('tasks') || [])
     .filter(t => t && !t.done && !t.held && t.date === dayISO && mine(t) && !(t.customerIds || []).length && !t.customerId)
     .map(t => ({key: 'task:' + t.id + ':none', kind: 'task', id: t.id, title: t.title || 'Task', placeAfter: t.placeAfter,
-                details: t.details || '', photoRequired: !!t.photoRequired, videoRequired: !!t.videoRequired}))
+                details: t.details || '', extraWork: t.extraWork || [], photoRequired: !!t.photoRequired, videoRequired: !!t.videoRequired}))
     .filter(j => !jobSubmitted(j.key));
 }
 
@@ -11547,6 +11554,7 @@ function jobSkipButton(customer, job, dayISO){
 }
 // Why a job is skipped (Oct 25): a reason is needed, like Skip Service
 function askJobSkipReason(customer, job){
+  const needPhoto = techRequires('requireSkipJobProof') || photoEveryoneOn('skipjob', 'skipjob');
   return new Promise(resolve=>{
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
@@ -11556,6 +11564,9 @@ function askJobSkipReason(customer, job){
     box.innerHTML = '<h3 style="font-size:15px;margin:0 0 4px;"></h3>'
       + '<p style="font-size:11.5px;color:var(--muted);margin:0 0 14px;">This goes to the office with the job so they know what happened.</p>'
       + '<div class="field"><label>Reason</label><textarea rows="4" placeholder="Gate was locked, part not in yet, customer asked to move it..." style="min-height:96px;"></textarea></div>'
+      + (needPhoto ? '<div class="field"><label>Photo (required)</label><button type="button" class="btn btn-ghost" data-k="photo" style="width:auto;">Take photo</button>'
+        + '<input type="file" accept="image/*" capture="environment" data-k="file" style="display:none;">'
+        + '<div data-k="wrap" style="display:none;margin-top:10px;"><img data-k="img" style="max-width:50%;border-radius:10px;border:1px solid var(--line);display:block;" alt="Skip photo"></div></div>' : '')
       + '<div class="btn-row"><button class="btn btn-primary" data-k="ok" style="flex:1;">Skip job</button><button class="btn btn-ghost" data-k="no" style="width:auto;">Cancel</button></div>';
     box.querySelector('h3').textContent = 'Why is ' + (customer ? customer.name + ' – ' : '') + (job.title || jobKindLabel(job.kind)) + ' being skipped?';
     overlay.appendChild(box);
@@ -11563,12 +11574,28 @@ function askJobSkipReason(customer, job){
     const text = box.querySelector('textarea');
     setTimeout(()=> text.focus(), 60);
     const done = r => { overlay.remove(); resolve(r); };
+    let photoData = null;
+    if(needPhoto){
+      const fileEl = box.querySelector('[data-k="file"]');
+      box.querySelector('[data-k="photo"]').addEventListener('click', ()=> fileEl.click());
+      fileEl.addEventListener('change', async ev=>{
+        const f = ev.target.files[0];
+        if(!f) return;
+        try{
+          photoData = await resizeImageFile(f, 900, 0.5);
+          box.querySelector('[data-k="img"]').src = photoData;
+          box.querySelector('[data-k="wrap"]').style.display = 'block';
+          box.querySelector('[data-k="photo"]').textContent = 'Retake photo';
+        }catch(err){ showToast('Could not read that photo'); }
+      });
+    }
     box.querySelector('[data-k="no"]').addEventListener('click', ()=> done(null));
     overlay.addEventListener('click', ev => { if(ev.target === overlay) done(null); });
     box.querySelector('[data-k="ok"]').addEventListener('click', ()=>{
       const reason = text.value.trim();
       if(!reason){ showToast('Add a reason first'); text.focus(); return; }
-      done(reason);
+      if(needPhoto && !photoData){ showToast('A photo is required to skip a job'); return; }
+      done({reason, photo: photoData});
     });
   });
 }
@@ -11576,8 +11603,9 @@ function askJobSkipReason(customer, job){
 // marked skipped with the reason in its notes. No customer email goes out.
 // The office can put it back on a day with Reschedule on Serviced today.
 async function skipRouteJob(customer, job, dayISO){
-  const reason = await askJobSkipReason(customer, job);
-  if(!reason) return;
+  const skipAns = await askJobSkipReason(customer, job);
+  if(!skipAns) return;
+  const reason = skipAns.reason;
   const stamp = new Date().toISOString();
   const noteText = 'Skipped — ' + reason;
   const me = currentUser ? currentUser.id : '';
@@ -11587,7 +11615,7 @@ async function skipRouteJob(customer, job, dayISO){
     durationMs: 0, skipped: true,
     key: job.key, kind: job.kind, sourceId: job.id,
     customerId: customer ? customer.id : null, customerName: customer ? customer.name : '', title: job.title,
-    notes: noteText, photo: null, photoMore: [], video: null, videoMore: [], date: dayISO || job.dayISO || todayDateStr(),
+    notes: noteText, photo: skipAns.photo || null, photoMore: [], video: null, videoMore: [], date: dayISO || job.dayISO || todayDateStr(),
     technicianId: me, submittedAt: stamp
   });
   lsSet('jobSubmissions', list);
@@ -11700,6 +11728,19 @@ function openJobPage(customer, job){
   // A filter clean starts straight at its photos: no customer name or address
   // under "Filter clean" (Oct 3)
   if(job.kind === 'filter clean' || job.kind === 'pool drain'){ who.style.display = 'none'; where.style.display = 'none'; }
+  // Customer notes written in the office's Drains window, on the pool drain and the clean & refill
+  if(customer && customer.drainNotes && (job.kind === 'pool drain' || (job.kind === 'task' && isRefillJob(job)))){
+    const nb = document.createElement('div');
+    nb.style.cssText = 'background:#FFF6DC;border:1.5px solid #E8C766;border-radius:12px;padding:10px 12px;margin:0 0 14px;';
+    const nh = document.createElement('div');
+    nh.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8A6A00;margin-bottom:4px;';
+    nh.textContent = 'Customer notes';
+    const nt = document.createElement('div');
+    nt.style.cssText = 'font-size:13.5px;line-height:1.45;white-space:pre-wrap;color:var(--ink);';
+    nt.textContent = customer.drainNotes;
+    nb.appendChild(nh); nb.appendChild(nt);
+    card.appendChild(nb);
+  }
   // A work order shows its line items and a task its name, in black, with no
   // customer name or address (Oct 3)
   const lineChecks = [];       // a work order's line items, all ticked before Submit
@@ -11751,6 +11792,46 @@ function openJobPage(customer, job){
       wrap.appendChild(line);
     });
     card.appendChild(wrap);
+  }
+  // A task's or work order's extra work from the office (Nov 3): each item with a
+  // box to tick before Submit, like a drain's
+  if(job.kind === 'task' || job.kind === 'work order'){
+    const extra = (job.extraWork || []).filter(li => li && String(li.description || '').trim())
+      .map(li => String(li.description).trim() + ((Number(li.qty) || 1) > 1 ? ' \u00d7 ' + Number(li.qty) : ''));
+    if(extra.length){
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin:2px 0 14px;';
+      const hd = document.createElement('div');
+      hd.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;color:var(--teal-mid);text-transform:uppercase;letter-spacing:0.07em;margin:4px 0 6px;";
+      hd.textContent = 'Extra work';
+      wrap.appendChild(hd);
+      extra.forEach(t=>{
+        const line = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        jobTickTile(line, cb);
+        lineChecks.push(cb);
+        const span = document.createElement('span');
+        span.textContent = t;
+        line.appendChild(cb); line.appendChild(span);
+        wrap.appendChild(line);
+      });
+      card.appendChild(wrap);
+    }
+  }
+  // A Clean & refill: Turn on autofill, ticked before Submit (Nov 3)
+  const refillChecks = [];
+  if(job.kind === 'task' && (isRefillJob(job) || isRefillJob((lsGet('tasks') || []).find(x => x && x.id === job.id)))){
+    const line = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    jobTickTile(line, cb);
+    line.style.margin = '0 0 14px';
+    refillChecks.push(cb);
+    const span = document.createElement('span');
+    span.textContent = 'Turn on autofill';
+    line.appendChild(cb); line.appendChild(span);
+    card.appendChild(line);
   }
   // A pool drain's extra work from the office (Oct 13): each item with a box to
   // tick, all ticked before Submit, like a work order's items
@@ -11948,6 +12029,11 @@ function openJobPage(customer, job){
       showToast('Tick ' + notOff.map(t => '\u201c' + t + '\u201d').join(' and ') + ' first');
       return;
     }
+    // A Clean & refill can't go until autofill is turned on (Nov 3)
+    if(refillChecks.some(cb => !cb.checked)){
+      showToast('Tick \u201cTurn on autofill\u201d first');
+      return;
+    }
     // Every line item ticked first (Oct 3)
     const unticked = lineChecks.filter(cb => !cb.checked).length;
     if(unticked){
@@ -12012,6 +12098,8 @@ function openJobPage(customer, job){
           // Its time: every customer's part added up (Oct 10)
           const total = who.reduce((n, k)=>{ const x = subs.find(y => y.key === k); return n + ((x && x.durationMs) || 0); }, 0);
           if(total) t.doneDurationMs = total;
+          // The extra work ticked off to get here (Nov 3)
+          if(Array.isArray(t.extraWork) && t.extraWork.length) t.doneExtraWork = t.extraWork.map(li => String((li && li.description) || '').trim()).filter(Boolean);
           lsSet('tasks', all);
         }
       }
@@ -12071,6 +12159,8 @@ function openJobPage(customer, job){
         j.doneBy = currentUser ? currentUser.id : '';
         j.doneNotes = noteText;
         j.doneDurationMs = durationMs;
+        // The extra work ticked off to get here (Nov 3)
+        if(Array.isArray(j.extraWork) && j.extraWork.length) j.doneExtraWork = j.extraWork.map(li => String((li && li.description) || '').trim()).filter(Boolean);
         // The photo and video go to the office with it (Oct 3)
         if(isPhotoRef(stored)) j.donePhoto = stored;
         if(storedMore.length) j.donePhotoMore = storedMore;
@@ -13482,7 +13572,8 @@ async function reserviceCustomer(customer, forDay){
 
 
 // Asks why a service was skipped, with an optional photo
-function openSkipReasonModal(customer){
+function openSkipReasonModal(customer, forcePhoto){
+  const photoNeeded = forcePhoto === true || appSettings.requireSkipPhoto === true;
   return new Promise((resolve)=>{
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
@@ -13495,8 +13586,8 @@ function openSkipReasonModal(customer){
           <textarea id="skipReasonText" rows="4" placeholder="Gate was locked, dog in the yard, customer asked to reschedule..." style="min-height:96px;"></textarea>
         </div>
         <div class="field">
-          <label>Photo (optional)</label>
-          <button type="button" class="btn btn-ghost" id="skipPhotoBtn" style="width:auto;">${appSettings.requireSkipPhoto === true ? 'Take photo (required)' : 'Take photo'}</button>
+          <label>Photo${photoNeeded ? ' (required)' : ' (optional)'}</label>
+          <button type="button" class="btn btn-ghost" id="skipPhotoBtn" style="width:auto;">${photoNeeded ? 'Take photo (required)' : 'Take photo'}</button>
           <input type="file" accept="image/*" capture="environment" id="skipPhotoInput" style="display:none;">
           <div id="skipPhotoWrap" style="display:none;margin-top:10px;">
             <img id="skipPhotoPreview" style="max-width:100%;border-radius:10px;border:1px solid var(--line);display:block;" alt="Skip photo">
@@ -13540,7 +13631,7 @@ function openSkipReasonModal(customer){
     overlay.querySelector('#skipReasonSave').addEventListener('click', ()=>{
       const reason = textEl.value.trim();
       if(!reason){ showToast('Add a reason first'); textEl.focus(); return; }
-      if(appSettings.requireSkipPhoto === true && !photoData){
+      if(photoNeeded && !photoData){
         showToast('A photo is required to skip a service');
         return;
       }
@@ -13562,8 +13653,9 @@ function skipService(...args){
 }
 async function adminVersion_skipService(customer){
   let skipInfo = null;
-  if(appSettings.requireSkipReason === true || appSettings.requireSkipPhoto === true){
-    skipInfo = await openSkipReasonModal(customer);
+  const mustProve = techRequires('requireSkipJobProof') || photoEveryoneOn('skipjob', 'skipjob');
+  if(mustProve || appSettings.requireSkipReason === true || appSettings.requireSkipPhoto === true){
+    skipInfo = await openSkipReasonModal(customer, mustProve);
     if(!skipInfo) return;
   } else {
     const confirmed = await confirmDialog('Are you sure you want to skip service for ' + customer.name + ' today?', 'Yes');
@@ -13608,8 +13700,9 @@ async function adminVersion_skipService(customer){
 }
 async function techVersion_skipService(customer){
   let skipInfo = null;
-  if(appSettings.requireSkipReason === true || appSettings.requireSkipPhoto === true){
-    skipInfo = await openSkipReasonModal(customer);
+  const mustProve = techRequires('requireSkipJobProof') || photoEveryoneOn('skipjob', 'skipjob');
+  if(mustProve || appSettings.requireSkipReason === true || appSettings.requireSkipPhoto === true){
+    skipInfo = await openSkipReasonModal(customer, mustProve);
     if(!skipInfo) return;
   } else {
     const confirmed = await confirmDialog('Are you sure you want to skip service for ' + customer.name + ' today?', 'Yes');
@@ -14585,17 +14678,19 @@ async function refreshDateSelector(customerId){
   // Nothing picked until a date is chosen here or a row is pressed (Oct 3)
   const none = document.createElement('option');
   none.value = '';
-  none.textContent = 'Pick a date';
+  // mm/dd/yyyy, like every other date box (Nov 2)
+  none.textContent = 'mm/dd/yyyy';
   sel.appendChild(none);
+  const mdy = ts => { const t = new Date(ts); return isNaN(t) ? '' : String(t.getMonth() + 1).padStart(2, '0') + '/' + String(t.getDate()).padStart(2, '0') + '/' + t.getFullYear(); };
   dates.forEach(d=>{
     const opt = document.createElement('option');
     opt.value = d.dateStr;
     opt.textContent = d.wo
-      ? fmtDate(d.ts) + '  \u2014 Work order ' + workOrderNumberText(d.wo.workOrderNumber)
-      : d.fc ? fmtDate(d.ts) + '  \u2014 Filter clean'
-      : d.pd ? fmtDate(d.ts) + '  \u2014 ' + drainTitle(d.pd)
-      : d.task ? fmtDate(d.ts) + '  \u2014 Task'
-      : fmtDate(d.ts) + (d.isRedo ? '  \u2014 redone' : '');
+      ? mdy(d.ts) + '  \u2014 Work order ' + workOrderNumberText(d.wo.workOrderNumber)
+      : d.fc ? mdy(d.ts) + '  \u2014 Filter clean'
+      : d.pd ? mdy(d.ts) + '  \u2014 ' + drainTitle(d.pd)
+      : d.task ? mdy(d.ts) + '  \u2014 Task'
+      : mdy(d.ts) + (d.isRedo ? '  \u2014 redone' : '');
     sel.appendChild(opt);
   });
   document.getElementById('reportDateHint').style.display = 'none';
@@ -14894,7 +14989,7 @@ document.getElementById('btnClearReportCustomer').addEventListener('click', ()=>
   const rowsBox = document.getElementById('reportRows');
   if(rowsBox) rowsBox.innerHTML = '';
   const dateSel = document.getElementById('reportReadingSelect');
-  if(dateSel) dateSel.innerHTML = '';
+  if(dateSel) dateSel.innerHTML = '<option value="">mm/dd/yyyy</option>';
   availableReportDates = []; reportDateDays = [];
   document.getElementById('reportDateHint').style.display = 'none';
   input.focus();
@@ -16805,7 +16900,7 @@ function awcBuild(pane){
           <label style="margin:0;">Scheduled date</label>
           <span class="awc-num" id="awcWoNumber"></span>
         </div>
-        <input type="date" id="awcWoDate" style="width:auto;">
+        <input type="date" id="awcWoDate" style="width:auto;min-width:0;max-width:140px;">
         <!-- The four ticks in two even columns under the date (Oct 19): Photo and
              Video required, then Email customer and Include prices, as on the
              website. A label too long for its half wraps rather than running
@@ -16883,7 +16978,7 @@ function awcBuild(pane){
       <div class="field">
         <label>Scheduled date</label>
         <div style="display:flex;align-items:center;gap:10px;">
-          <input type="date" id="awcTaskDate" style="width:auto;">
+          <input type="date" id="awcTaskDate" style="width:auto;min-width:0;max-width:140px;">
           <button type="button" class="btn btn-primary" id="awcSavedTasks" style="width:auto;margin-left:auto;padding:9px 14px;font-size:14px;white-space:nowrap;flex-shrink:0;">Saved tasks</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:12px;">
@@ -17137,6 +17232,22 @@ function awcApplyRepeats(){
 // that name, so the job shows it on Today, the calendar and the website like
 // anyone else's. No service day and no pool, so they're never on a service
 // route or a drain list; the details can be filled in later.
+// "+ Use <name>" row for a customer search (Nov 5): someone not on the list,
+// by name, for a job. Not shown when that exact name is already a customer.
+function jobNameOnlyRow(typed, onAdd, css){
+  const t = String(typed || '').trim();
+  if(!t || (customers || []).some(c => c && !c.deleted && String(c.name || '').trim().toLowerCase() === t.toLowerCase())) return null;
+  const row = document.createElement('div');
+  row.className = 'press-row';
+  row.dataset.addName = '1';
+  row.style.cssText = css || 'padding:10px 12px;cursor:pointer;border-top:1px solid var(--line);font-size:14px;';
+  row.innerHTML = '<div style="font-weight:600;"></div><div style="font-size:12px;color:var(--muted);">Not a customer yet — just the name for now</div>';
+  row.firstChild.textContent = '+ Use “' + t + '”';
+  const go = e=>{ e.preventDefault(); onAdd(t); };
+  row.addEventListener('mousedown', go);
+  row.addEventListener('touchstart', go, {passive: false});
+  return row;
+}
 function addNameOnlyCustomer(name){
   const c = {id: 'cust_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: String(name || '').trim(),
              active: true, hasPool: false, hasSpa: false, technicianId: '', nameOnly: true, createdAt: new Date().toISOString()};
@@ -19786,6 +19897,7 @@ function acalAddFcPd(kind, iso){
     + '<input type="text" data-search placeholder="Start typing a name\u2026" autocomplete="off">'
     + '<div data-sug style="display:none;position:absolute;left:0;right:0;z-index:40;background:#fff;border:1px solid var(--line);border-radius:10px;margin-top:4px;box-shadow:0 4px 14px rgba(15,46,46,0.14);max-height:240px;overflow-y:auto;"></div></div>'
     + '<div class="field"><label>Technician</label><select data-tech></select></div>'
+    + '<div class="field" id="acalRpHost" style="display:none;"></div>'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;margin:2px 0 8px;cursor:pointer;"><input type="checkbox" data-photo checked style="width:auto;margin:0;"> Photo required</label>'
     + (isFc ? '<label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;margin:0 0 16px;cursor:pointer;"><input type="checkbox" data-email checked style="width:auto;margin:0;"> Email the customer</label>' : '<div style="height:8px;"></div>')
     + '<div class="btn-row" style="flex-wrap:nowrap;"><button type="button" class="btn btn-primary" data-go style="flex:1 1 0;">Add to route</button>'
@@ -19805,6 +19917,14 @@ function acalAddFcPd(kind, iso){
   techniciansInOrder().forEach(t => { if(t && t.id) addOpt(String(t.id), t.name || 'Technician'); });
   if(acalTech) techSel.value = acalTech;
   const nameOf = c => (typeof displayName === 'function' ? displayName(c.name) : c.name) || 'Customer';
+  // Where in the route (Nov 2): the same picker a work order or task has, for a
+  // single customer; with more than one, each goes under its own customer
+  const rp = makeRoutePlace({host: 'acalRpHost', active: ()=> true, date: ()=> iso,
+    techIds: ()=> techSel.value ? [techSel.value] : Array.from(new Set(picked.map(id => String((acalCust(id) || {}).technicianId || '')).filter(Boolean))),
+    customerIds: ()=> picked.slice(),
+    label: ()=> (isFc ? 'Filter clean' : 'Pool drain') + (picked.length === 1 ? ' \u00b7 ' + nameOf(acalCust(picked[0]) || {}) : ''),
+    stopsFor: appRouteStopsFor, techName: id => acalTechName(id), nameOf: c => c.name || ''});
+  techSel.addEventListener('change', ()=> rp.refresh());
   function drawChips(){
     chips.innerHTML = '';
     chips.style.marginBottom = picked.length ? '8px' : '0';
@@ -19821,6 +19941,7 @@ function acalAddFcPd(kind, iso){
       chip.appendChild(x);
       chips.appendChild(chip);
     });
+    rp.refresh();
   }
   function drawSug(){
     const term = search.value.trim().toLowerCase();
@@ -19828,7 +19949,11 @@ function acalAddFcPd(kind, iso){
     if(!term){ sug.style.display = 'none'; return; }
     const list = (customers || []).filter(c => c && !c.deleted && c.active !== false && picked.indexOf(c.id) === -1
       && [c.name, c.address, c.phone].some(v => String(v || '').toLowerCase().indexOf(term) !== -1)).slice(0, 12);
-    if(!list.length){ sug.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:10px 12px;">Nobody matches.</div>'; sug.style.display = 'block'; return; }
+    const addRow = ()=>{
+      const r = jobNameOnlyRow(search.value, name=>{ const c = addNameOnlyCustomer(name); picked.push(c.id); search.value = ''; drawSug(); drawChips(); });
+      if(r) sug.appendChild(r);
+    };
+    if(!list.length){ sug.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:10px 12px;">Nobody matches.</div>'; addRow(); sug.style.display = 'block'; return; }
     list.forEach(c=>{
       const row = document.createElement('div');
       row.className = 'press-row';
@@ -19841,6 +19966,7 @@ function acalAddFcPd(kind, iso){
       row.addEventListener('touchstart', pick, {passive: false});
       sug.appendChild(row);
     });
+    addRow();
     sug.style.display = 'block';
   }
   search.addEventListener('input', drawSug);
@@ -19852,13 +19978,16 @@ function acalAddFcPd(kind, iso){
     if(!picked.length){ showToast('Add a customer first'); search.focus(); return; }
     const noTech = !tech ? picked.filter(id => !((acalCust(id) || {}).technicianId)) : [];
     if(noTech.length){ showToast((noTech.length === 1 ? nameOf(acalCust(noTech[0])) + ' has' : 'Some have') + ' no technician of their own. Choose one.'); techSel.focus(); return; }
+    // Someone typed in by name goes to the technician chosen, so their phone has them
+    if(tech) giveNameOnlyTech(picked.map(id => acalCust(id)), tech);
     go.disabled = true; go.textContent = 'Adding\u2026';
     // The office's latest first, so nothing it just changed is lost
     const fresh = await acalFetchOffice(true);
     if(!fresh){ go.disabled = false; go.textContent = 'Add to route'; showToast('This needs signal \u2014 try again when you have some'); return; }
     const photo = box.querySelector('[data-photo]').checked;
-    const ok = isFc ? await acalAddFilterCleans(iso, picked, tech, photo, box.querySelector('[data-email]').checked)
-                    : await acalAddDrains(iso, picked, tech, photo);
+    const place = rp.value();
+    const ok = isFc ? await acalAddFilterCleans(iso, picked, tech, photo, box.querySelector('[data-email]').checked, place)
+                    : await acalAddDrains(iso, picked, tech, photo, place);
     if(!ok){ go.disabled = false; go.textContent = 'Add to route'; showToast('That didn\u2019t reach the office \u2014 try again when you have signal'); return; }
     close();
     acalDraw();
@@ -19868,7 +19997,7 @@ function acalAddFcPd(kind, iso){
   });
   setTimeout(()=> search.focus(), 0);
 }
-async function acalAddFilterCleans(iso, ids, tech, photo, email){
+async function acalAddFilterCleans(iso, ids, tech, photo, email, placeAfter){
   const groups = acalOffice.filterGroups || [];
   let g = groups.find(x => x && x.solo && x.date === iso);
   const isNew = !g;
@@ -19877,11 +20006,13 @@ async function acalAddFilterCleans(iso, ids, tech, photo, email){
   g = JSON.parse(JSON.stringify(g));
   const wasSent = !!g.finalized;
   g.customerIds = g.customerIds || [];
-  g.custTech = g.custTech || {}; g.custPhoto = g.custPhoto || {}; g.custEmail = g.custEmail || {};
+  g.custTech = g.custTech || {}; g.custPhoto = g.custPhoto || {}; g.custEmail = g.custEmail || {}; g.custPlace = g.custPlace || {};
   ids.forEach(id=>{
     if(g.customerIds.indexOf(id) === -1) g.customerIds.push(id);
     const own = String((acalCust(id) || {}).technicianId || '');
     if(tech && tech !== own) g.custTech[id] = tech; else delete g.custTech[id];
+    // Where in the route (Nov 2), kept on the group so the website keeps it too
+    if(typeof placeAfter === 'string') g.custPlace[id] = placeAfter; else delete g.custPlace[id];
     g.custPhoto[id] = photo;
     g.custEmail[id] = email;
     if(g.custHold) delete g.custHold[id];
@@ -19904,13 +20035,14 @@ async function acalAddFilterCleans(iso, ids, tech, photo, email){
     let r = sched.find(x => x && !x.reopened && x.groupId === g.id && x.customerId === id && x.status !== 'done');
     if(!r){ r = {id: 'fc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), groupId: g.id, customerId: id, status: 'scheduled', lineItems: []}; sched.push(r); }
     Object.assign(r, {groupName: g.name, technicianId: tId, date: iso, order: g.customerIds.indexOf(id), photoRequired: photo, emailCustomer: email});
+    if(typeof placeAfter === 'string') r.placeAfter = placeAfter; else delete r.placeAfter;
     queueOfficeWork('filter_clean', r.id);
   });
   lsSet('scheduledFilterCleans', sched);
   try{ fieldNoteLocalChange(); }catch(e){}
   return true;
 }
-async function acalAddDrains(iso, ids, tech, photo){
+async function acalAddDrains(iso, ids, tech, photo, placeAfter){
   const cal = acalOffice.drainCalendar || [];
   const recs = lsGet('scheduledPoolDrains') || [];
   const entries = [];
@@ -19925,6 +20057,7 @@ async function acalAddDrains(iso, ids, tech, photo){
     const own = String((c && c.technicianId) || '');
     if(tech && tech !== own) e.technicianId = tech; else delete e.technicianId;
     if(!photo) e.photoRequired = false; else delete e.photoRequired;
+    if(typeof placeAfter === 'string') e.placeAfter = placeAfter; else delete e.placeAfter;   // where in the route (Nov 2)
     e.pushed = e.pushed || {};
     const order = Math.max(0, sameDay.findIndex(x => x.customerId === cid)) || sameDay.length;
     bodies.forEach(b=>{
@@ -19933,6 +20066,7 @@ async function acalAddDrains(iso, ids, tech, photo){
       Object.assign(r, {date: iso, technicianId: tech || own, bodyKey: b.key, bodyName: b.label,
         bodyKind: b.key === 'pool' || b.key === 'spa' ? b.key : (/fountain/i.test(b.label) ? 'fountain' : 'extra'), order: order,
         photoRequired: !(c && c.drainPhotoRequired === false) && photo, emailCustomer: !(c && c.drainEmailCustomer === false)});
+      if(typeof placeAfter === 'string') r.placeAfter = placeAfter; else delete r.placeAfter;
     });
     entries.push(e);
   });
@@ -19978,7 +20112,7 @@ function acalOnDays(){
         const rec = fcRecs.find(f => f && !f.reopened && f.groupId === g.id && f.customerId === cid && f.date === g.date && f.status === 'done')
           || fcRecs.find(f => f && !f.reopened && f.groupId === g.id && f.customerId === cid && f.date === g.date);
         const st = rec && rec.status === 'done' ? 'done' : (g.finalized && !(g.custHold && g.custHold[cid]) ? 'app' : '');
-        return {cid: cid, st: st, tech: (rec && rec.technicianId) || techOf(cid)};
+        return {cid: cid, st: st, tech: (rec && rec.technicianId) || techOf(cid), gid: g.id, extra: (g.custExtra && Array.isArray(g.custExtra[cid])) ? g.custExtra[cid] : []};
       }).filter(r => mineTech(r.tech));
       if(rows.length) day(g.date).fc.push({name: g.solo ? 'On their own' : (g.name || 'Group'), solo: !!g.solo, tech: g.technicianId, rows: rows});
     });
@@ -20193,6 +20327,64 @@ function acalDraw(){
   card.appendChild(key);
   if(acalSel) card.appendChild(acalDayWindow(byDay[acalSel] || {fc: [], pd: [], wo: [], tk: []}));
 }
+// ---------- Extra work on a job, from the calendar (Nov 3) ----------
+// A window to add or take off the items; each shows on the job in the app as a
+// box to tick, like a drain's. onSave(items) answers true when it went through.
+function acalExtraWindow(name, current, onSave){
+  let items = (current || []).filter(li => li && String(li.description || '').trim()).map(li => Object.assign({}, li));
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = '<div class="confirm-box" style="max-width:420px;text-align:left;">'
+    + '<h3 style="font-size:15px;margin:0 0 2px;">Extra work</h3>'
+    + '<p data-who style="font-size:12px;color:var(--muted);margin:0 0 10px;"></p>'
+    + '<div data-list></div>'
+    + '<div style="display:flex;gap:8px;margin-top:10px;"><input type="text" data-new placeholder="Type an item\u2026" autocomplete="off" style="flex:1;min-width:0;">'
+    + '<button type="button" class="btn btn-ghost" data-add style="width:auto;flex:0 0 auto;padding:6px 12px;font-size:13px;">Add</button></div>'
+    + '<div class="btn-row" style="flex-direction:column;gap:8px;margin-top:14px;">'
+    + '<button type="button" class="btn btn-primary" data-done style="width:100%;">Done</button>'
+    + '<button type="button" class="btn btn-ghost" data-cancel style="width:100%;">Cancel</button></div></div>';
+  overlay.querySelector('[data-who]').textContent = name;
+  document.body.appendChild(overlay);
+  const listEl = overlay.querySelector('[data-list]');
+  const input = overlay.querySelector('[data-new]');
+  const close = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  const draw = ()=>{
+    listEl.innerHTML = '';
+    if(!items.length){ const n = document.createElement('div'); n.style.cssText = 'font-size:12.5px;color:var(--muted);padding:4px 0;'; n.textContent = 'Nothing added yet.'; listEl.appendChild(n); }
+    items.forEach((li, i)=>{
+      const r = document.createElement('div');
+      r.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:600;';
+      const t = document.createElement('span'); t.style.cssText = 'flex:1;min-width:0;overflow-wrap:anywhere;'; t.textContent = li.description + ((Number(li.qty) || 1) > 1 ? ' \u00d7 ' + Number(li.qty) : '');
+      const bin = document.createElement('button');
+      bin.type = 'button'; bin.title = 'Take this off'; bin.setAttribute('aria-label', 'Take this off');
+      bin.style.cssText = 'display:inline-flex;cursor:pointer;flex-shrink:0;';
+      bin.innerHTML = '<svg class="weir-bin" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      bin.addEventListener('click', ()=>{ items.splice(i, 1); draw(); });
+      r.appendChild(t); r.appendChild(bin); listEl.appendChild(r);
+    });
+  };
+  const addOne = ()=>{
+    const v = input.value.trim();
+    if(!v){ input.focus(); return; }
+    items.push({description: v, qty: 1, price: ''});
+    input.value = ''; draw(); input.focus();
+  };
+  overlay.querySelector('[data-add]').addEventListener('click', addOne);
+  input.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); e.stopPropagation(); if(input.value.trim()) addOne(); else overlay.querySelector('[data-done]').click(); } });
+  overlay.querySelector('[data-cancel]').addEventListener('click', close);
+  overlay.addEventListener('click', e=>{ if(e.target === overlay) close(); });   // outside click closes
+  overlay.querySelector('[data-done]').addEventListener('click', async ()=>{
+    if(input.value.trim()) addOne();
+    const btn = overlay.querySelector('[data-done]'); btn.disabled = true;
+    const ok = await onSave(items);
+    if(!ok){ btn.disabled = false; showToast('Couldn\u2019t reach the office \u2014 try again with a connection'); return; }
+    try{ fieldNoteLocalChange(); }catch(e){}
+    close(); acalDraw();
+    showToast(items.length ? 'Extra work saved' : 'Extra work taken off');
+  });
+  draw();
+  setTimeout(()=>{ try{ input.focus(); }catch(e){} }, 50);
+}
 function acalDayWindow(on){
   const iso = acalSel;
   const sheet = document.createElement('div');
@@ -20244,19 +20436,106 @@ function acalDayWindow(on){
       + (extra ? '<span style="font-size:11.5px;font-weight:600;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + acalEsc(extra) + '</span>' : '');
     sheet.appendChild(d);
   };
-  const row = (name, sub, st, right)=>{
+  // A job's row (Nov 3), each job its own block:
+  //  1. its kind badge at the left (POOL DRAINS...), and at the far right
+  //     Extra work, Move, then the bin
+  //  2. the customer at the far left, the status in the middle, then the
+  //     technician menu
+  //  3. what it is (the body, the work order or task) at the left, then any
+  //     extra work added, to the right of it
+  const row = (name, sub, st, right, xi, tagKey, tagExtra)=>{
     const r = document.createElement('div');
-    r.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;';
-    r.innerHTML = '<div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div><div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div></div>'
-      + '<span style="font-size:10px;font-weight:700;color:#fff;padding:3px 7px;border-radius:6px;white-space:nowrap;flex-shrink:0;background:' + ACAL_STATES[st][1] + ';">' + ACAL_STATES[st][0] + '</span>';
-    r.children[0].children[0].textContent = name;
-    r.children[0].children[1].textContent = sub || '';
-    if(!sub) r.children[0].children[1].remove();
-    (right || []).forEach(el => r.appendChild(el));
+    r.style.cssText = 'display:flex;flex-direction:column;gap:7px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;';
+    // 1
+    const top = document.createElement('div');
+    top.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    if(tagKey && ACAL_TAGS[tagKey]){
+      const tg = document.createElement('span');
+      tg.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;background:" + ACAL_TAGS[tagKey][2] + ';color:' + ACAL_TAGS[tagKey][3] + ';';
+      tg.textContent = ACAL_TAGS[tagKey][1];
+      top.appendChild(tg);
+      if(tagExtra){
+        const te = document.createElement('span');
+        te.style.cssText = 'font-size:11px;font-weight:600;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        te.textContent = tagExtra;
+        top.appendChild(te);
+      }
+    }
+    const ctl = (right || []).filter(Boolean);
+    const menu = ctl.length && ctl[0].tagName === 'SELECT' ? ctl.shift() : null;
+    const acts = document.createElement('div');
+    acts.style.cssText = 'display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;';
+    if(xi && !xi.done){
+      const xb = document.createElement('button');
+      xb.type = 'button';
+      xb.textContent = xi.items.length ? 'Extra work ✓' : '+ Extra work';
+      xb.style.cssText = 'flex:0 0 auto;white-space:nowrap;border:1px dashed #BFDCD8;color:var(--ink);background:#fff;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;';
+      xb.addEventListener('click', e=>{ e.stopPropagation(); acalExtraWindow(name, xi.items, xi.save); });
+      acts.appendChild(xb);
+    }
+    ctl.forEach(el => acts.appendChild(el));
+    top.appendChild(acts);
+    r.appendChild(top);
+    // 2
+    const mid = document.createElement('div');
+    mid.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const nm = document.createElement('div');
+    nm.style.cssText = 'flex:1 1 0;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nm.textContent = name;
+    mid.appendChild(nm);
+    const badgeEl = document.createElement('span');
+    badgeEl.style.cssText = 'font-size:10px;font-weight:700;color:#fff;padding:3px 7px;border-radius:6px;white-space:nowrap;flex-shrink:0;background:' + ACAL_STATES[st][1] + ';';
+    badgeEl.textContent = ACAL_STATES[st][0];
+    mid.appendChild(badgeEl);
+    if(menu) mid.appendChild(menu);
+    r.appendChild(mid);
+    // 3
+    const hasItems = xi && xi.items.length;
+    if(sub || hasItems){
+      const low = document.createElement('div');
+      low.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      if(sub){
+        const sb = document.createElement('div');
+        sb.style.cssText = 'flex:0 1 auto;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        sb.textContent = sub;
+        low.appendChild(sb);
+      }
+      if(hasItems){
+        const tags = document.createElement('div');
+        tags.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-left:auto;justify-content:flex-end;';
+        xi.items.forEach(li=>{
+          const t = document.createElement('span');
+          t.style.cssText = 'background:#E9EEF0;color:#3E5560;font-size:11px;font-weight:600;padding:2px 8px;border-radius:7px;';
+          t.textContent = li.description + ((Number(li.qty) || 1) > 1 ? ' × ' + Number(li.qty) : '');
+          tags.appendChild(t);
+        });
+        low.appendChild(tags);
+      }
+      r.appendChild(low);
+    }
     sheet.appendChild(r);
     return r;
   };
   const techText = id=>{ const s = document.createElement('span'); s.style.cssText = 'font-size:11.5px;color:var(--muted);width:84px;text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; s.textContent = acalTechName(id); return s; };
+  // The technician menu a work order or task has (Nov 2), for a filter clean or
+  // a pool drain: onPick saves it and answers true, or false if it didn't go
+  const techPick = (curId, locked, onPick)=>{
+    if(locked) return null;   // a finished job shows no technician menu (Nov 3)
+    const sel = document.createElement('select');
+    sel.style.cssText = 'width:90px;padding:4px 6px;font-size:11.5px;flex-shrink:0;';
+    techniciansInOrder().forEach(t => { if(t && t.id){ const o = document.createElement('option'); o.value = String(t.id); o.textContent = t.name || 'Technician'; sel.appendChild(o); } });
+    if(!Array.from(sel.options).some(o => o.value === String(curId || ''))){ const o = document.createElement('option'); o.value = String(curId || ''); o.textContent = acalTechName(curId); sel.insertBefore(o, sel.firstChild); }
+    sel.value = String(curId || '');
+    sel.disabled = locked;
+    sel.addEventListener('change', async ()=>{
+      if(!sel.value){ sel.value = String(curId || ''); return; }
+      if(!(await onPick(sel.value))){ showToast('Couldn’t reach the office — try again with a connection'); acalDraw(); return; }
+      try{ fieldNoteLocalChange(); }catch(e){}
+      acalDraw();
+      showToast('Now on ' + acalTechName(sel.value) + '’s route');
+    });
+    return sel;
+  };
   // Move to another day (Nov 1): the calendar-with-arrow button
   const moveBtn = opts=>{
     const m = document.createElement('button');
@@ -20269,13 +20548,147 @@ function acalDayWindow(on){
     return m;
   };
   on.fc.forEach(g=>{
-    badge('fc', g.name + (g.solo ? '' : g.tech ? ' · ' + acalTechName(g.tech) : ''));
-    g.rows.forEach(r => row((acalCust(r.cid) || {}).name || 'Customer', '', r.st, [techText(r.tech)]));
+    const fcTagExtra = g.solo ? '' : g.name + (g.tech ? ' · ' + acalTechName(g.tech) : '');
+    g.rows.forEach(r => {
+    // The bin (Nov 3): this customer off the day and off the route, same bin as the WorkCenter's
+    let fcBin = null;
+    if(r.st !== 'done'){
+      fcBin = document.createElement('button');
+      fcBin.type = 'button';
+      fcBin.title = 'Take this filter clean off';
+      fcBin.setAttribute('aria-label', fcBin.title);
+      fcBin.style.cssText = 'display:inline-flex;cursor:pointer;';
+      fcBin.innerHTML = '<svg class="weir-bin" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      fcBin.addEventListener('click', async e=>{
+        e.stopPropagation();
+        const who = (acalCust(r.cid) || {}).name || 'this customer';
+        const ok = await confirmDialog('Take ' + who + '\u2019s filter clean off ' + h.textContent + '? It comes off the route too.', 'Take off');
+        if(!ok) return;
+        const grp = r.gid ? (acalOffice.filterGroups || []).find(x => x && x.id === r.gid) : null;
+        if(grp){
+          const ng = JSON.parse(JSON.stringify(grp));
+          ng.customerIds = (ng.customerIds || []).filter(id => id !== r.cid);
+          ['custTech', 'custExtra', 'custPhoto', 'custEmail', 'custPlace', 'custHold'].forEach(k=>{ if(ng[k]) delete ng[k][r.cid]; });
+          if(!(await acalPushOffice('filter_group', ng))){ showToast('Couldn\u2019t reach the office \u2014 try again with a connection'); return; }
+          grp.customerIds = ng.customerIds;
+        }
+        const sch = lsGet('scheduledFilterCleans') || [];
+        const keep = [];
+        sch.forEach(f=>{
+          if(f && !f.reopened && f.status !== 'done' && String(f.customerId) === String(r.cid) && f.date === iso && (!r.gid || f.groupId === r.gid)){ queueOfficeWork('filter_clean', f.id, true); }
+          else keep.push(f);
+        });
+        lsSet('scheduledFilterCleans', keep);
+        try{ fieldNoteLocalChange(); }catch(err){}
+        acalDraw();
+        showToast('Taken off');
+      });
+    }
+    const fcMove = r.st === 'done' ? null : moveBtn({
+      name: (acalCust(r.cid) || {}).name || 'Customer', what: 'Filter clean', techId: r.tech || '',
+      onMove: async (to, tech)=>{
+        // Out of its group onto its own filter clean that day, with its technician
+        // and extra work; the route follows (as the website's Move does)
+        const grp = r.gid ? (acalOffice.filterGroups || []).find(x => x && x.id === r.gid) : null;
+        const own = String((acalCust(r.cid) || {}).technicianId || '');
+        const useTech = tech || r.tech || own;
+        const photo = grp && grp.custPhoto && grp.custPhoto[r.cid] !== undefined ? !!grp.custPhoto[r.cid] : !(grp && grp.photoRequired === false);
+        const email = grp && grp.custEmail && grp.custEmail[r.cid] !== undefined ? !!grp.custEmail[r.cid] : !(grp && grp.emailCustomer === false);
+        if(!(await acalAddFilterCleans(to, [r.cid], useTech, photo, email))) return false;
+        const solo = (acalOffice.filterGroups || []).find(x => x && x.solo && x.date === to);
+        const extra = (r.extra || []).filter(li => li && String(li.description || '').trim());
+        if(solo && extra.length){
+          const ns = JSON.parse(JSON.stringify(solo));
+          ns.custExtra = ns.custExtra || {}; ns.custExtra[r.cid] = extra;
+          if(await acalPushOffice('filter_group', ns)) solo.custExtra = ns.custExtra;
+          const sch = lsGet('scheduledFilterCleans') || [];
+          sch.forEach(f=>{ if(f && !f.reopened && f.status !== 'done' && solo && f.groupId === solo.id && String(f.customerId) === String(r.cid)){ f.lineItems = (f.lineItems || []).filter(li => li && li.replacement).concat(extra.map(li => ({description: String(li.description).trim(), qty: Number(li.qty) || 1, price: li.price === undefined ? '' : li.price}))); queueOfficeWork('filter_clean', f.id, false); } });
+          lsSet('scheduledFilterCleans', sch);
+        }
+        if(grp && (!solo || grp.id !== solo.id)){
+          const ng = JSON.parse(JSON.stringify(grp));
+          ng.customerIds = (ng.customerIds || []).filter(id => id !== r.cid);
+          ['custTech', 'custExtra', 'custPhoto', 'custEmail', 'custPlace', 'custHold'].forEach(k=>{ if(ng[k]) delete ng[k][r.cid]; });
+          if(!(await acalPushOffice('filter_group', ng))) return false;
+          grp.customerIds = ng.customerIds;
+          const sch = lsGet('scheduledFilterCleans') || [];
+          const keep = [];
+          sch.forEach(f=>{
+            if(f && !f.reopened && f.status !== 'done' && f.groupId === grp.id && String(f.customerId) === String(r.cid) && f.date === iso){ queueOfficeWork('filter_clean', f.id, true); }
+            else keep.push(f);
+          });
+          lsSet('scheduledFilterCleans', keep);
+        }
+        try{ fieldNoteLocalChange(); }catch(e){}
+        return true;
+      }
+    });
+    row((acalCust(r.cid) || {}).name || 'Customer', '', r.st, [techPick(r.tech, r.st === 'done', async tech=>{
+      // The group's own list says who does this customer; the filter clean on
+      // the route (if it's been sent) follows
+      const grp = r.gid ? (acalOffice.filterGroups || []).find(x => x && x.id === r.gid) : null;
+      if(grp){
+        const ng = JSON.parse(JSON.stringify(grp));
+        ng.custTech = ng.custTech || {};
+        ng.custTech[r.cid] = tech;
+        if(!(await acalPushOffice('filter_group', ng))) return false;
+        grp.custTech = ng.custTech;
+      }
+      const sched = lsGet('scheduledFilterCleans') || [];
+      let n = 0;
+      sched.forEach(f=>{
+        if(f && !f.reopened && f.status !== 'done' && String(f.customerId) === String(r.cid) && f.date === iso && (!r.gid || f.groupId === r.gid)){
+          f.technicianId = tech; queueOfficeWork('filter_clean', f.id, false); n++;
+        }
+      });
+      if(n && !lsSet('scheduledFilterCleans', sched)){ showToast('Could not save — the phone is full'); return true; }
+      return true;
+    }), fcMove, fcBin], {done: r.st === 'done', items: (r.extra || []).filter(li => li && String(li.description || '').trim()), save: async items=>{
+      // Extra work on the group's list for this customer (Nov 3); the filter
+      // clean on the route follows, keeping any replacements it carries
+      const grp = r.gid ? (acalOffice.filterGroups || []).find(x => x && x.id === r.gid) : null;
+      if(grp){
+        const ng = JSON.parse(JSON.stringify(grp));
+        ng.custExtra = ng.custExtra || {};
+        if(items.length) ng.custExtra[r.cid] = items; else delete ng.custExtra[r.cid];
+        if(!(await acalPushOffice('filter_group', ng))) return false;
+        grp.custExtra = ng.custExtra;
+      }
+      const sched = lsGet('scheduledFilterCleans') || [];
+      let n = 0;
+      sched.forEach(f=>{
+        if(f && !f.reopened && f.status !== 'done' && String(f.customerId) === String(r.cid) && f.date === iso && (!r.gid || f.groupId === r.gid)){
+          f.lineItems = (f.lineItems || []).filter(li => li && li.replacement).concat(items.map(li => ({description: String(li.description).trim(), qty: Number(li.qty) || 1, price: li.price === undefined ? '' : li.price})));
+          queueOfficeWork('filter_clean', f.id, false); n++;
+        }
+      });
+      if(n && !lsSet('scheduledFilterCleans', sched)){ showToast('Could not save — the phone is full'); return false; }
+      r.extra = items;
+      return true;
+    }}, 'fc', fcTagExtra); });
   });
   if(on.pd.length){
-    badge('pd');
     on.pd.forEach(r=>{
-      const right = [techText(r.tech)];
+      const right = [techPick(r.tech, r.st === 'done', async tech=>{
+        // The calendar entry at the office, and each of its drains on the route
+        const real = r.entry && Array.isArray(acalOffice.drainCalendar) ? acalOffice.drainCalendar.find(x => x && x.id === r.entry.id) : null;
+        if(real){
+          const e = JSON.parse(JSON.stringify(real));
+          e.technicianId = tech;
+          if(!(await acalPushOffice('drain_entry', e))) return false;
+          real.technicianId = tech;
+        }
+        const ids = real ? Object.keys(real.pushed || {}).map(k => real.pushed[k]).concat(real.pushedId ? [real.pushedId] : []) : [];
+        const recs = lsGet('scheduledPoolDrains') || [];
+        let n = 0;
+        recs.forEach(x=>{
+          if(x && !x.reopened && x.status !== 'done' && (ids.indexOf(x.id) !== -1 || (String(x.customerId) === String(r.cid) && x.date === iso))){
+            x.technicianId = tech; queueOfficeWork('pool_drain', x.id, false); n++;
+          }
+        });
+        if(n && !lsSet('scheduledPoolDrains', recs)){ showToast('Could not save — the phone is full'); return true; }
+        return true;
+      })];
       // Move (Nov 1): the day's drain and anything of it on the route, not done
       if(r.entry && r.st !== 'done') right.push(moveBtn({
         name: (acalCust(r.cid) || {}).name || 'Customer', what: 'Pool drain', techId: r.tech || '',
@@ -20315,21 +20728,42 @@ function acalDayWindow(on){
         });
         right.push(bin);
       }
-      row((acalCust(r.cid) || {}).name || 'Customer', r.bodies.join(', '), r.st, right);
+      const pdItems = r.entry && Array.isArray(r.entry.extraWork) ? r.entry.extraWork.filter(li => li && String(li.description || '').trim()) : [];
+      row((acalCust(r.cid) || {}).name || 'Customer', r.bodies.length > 1 ? r.bodies.join(', ') : '', r.st, right, !r.entry ? null : {done: r.st === 'done', items: pdItems, save: async items=>{
+        // The calendar entry at the office, and its drain on the route that isn't
+        // done: the first carries the items, as on the website (Nov 3)
+        const real = Array.isArray(acalOffice.drainCalendar) ? acalOffice.drainCalendar.find(x => x && x.id === r.entry.id) : null;
+        const e = JSON.parse(JSON.stringify(real || r.entry));
+        if(items.length) e.extraWork = items; else delete e.extraWork;
+        if(!(await acalPushOffice('drain_entry', e))) return false;
+        if(real){ if(items.length) real.extraWork = items; else delete real.extraWork; }
+        if(items.length) r.entry.extraWork = items; else delete r.entry.extraWork;
+        const ids = Object.keys(e.pushed || {}).map(k => e.pushed[k]).concat(e.pushedId ? [e.pushedId] : []);
+        const recs = lsGet('scheduledPoolDrains') || [];
+        let placed = false, n = 0;
+        recs.forEach(x=>{
+          if(!x || ids.indexOf(x.id) === -1 || x.status === 'done') return;
+          if(!placed && items.length){ x.lineItems = items.map(li => ({description: String(li.description).trim(), qty: Number(li.qty) || 1, price: li.price === undefined ? '' : li.price})); placed = true; }
+          else x.lineItems = [];
+          queueOfficeWork('pool_drain', x.id, false); n++;
+        });
+        if(n && !lsSet('scheduledPoolDrains', recs)){ showToast('Could not save — the phone is full'); return false; }
+        return true;
+      }}, 'pd');
     });
   }
   // Work orders and tasks: the technician can be changed and one taken off
   // here, as on the website
   const kinds = {wo: ['scheduledWorkOrders', 'work_order', 'work order'], tk: ['tasks', 'task', 'task']};
   // Clean & refill visits under their own CR heading (Nov 2), then the tasks
-  [['wo', 'wo', on.wo], ['cr', 'tk', on.tk.filter(it => it.crLike)], ['tk', 'tk', on.tk.filter(it => !it.crLike)]].forEach(([tag, k, items])=>{
+  // (Nov 3: Clean & refill goes right under the pool drains, before work orders)
+  [['cr', 'tk', on.tk.filter(it => it.crLike)], ['wo', 'wo', on.wo], ['tk', 'tk', on.tk.filter(it => !it.crLike)]].forEach(([tag, k, items])=>{
     if(!items.length) return;
-    badge(tag);
     items.forEach(it=>{
       const rec = it.rec;
       const c = acalCust(it.cid);
       const name = k === 'wo' ? ((c && c.name) || 'Customer') : (c ? c.name : (rec.title || 'Task'));
-      const sub = k === 'wo' ? ((rec.workOrderNumber ? '#' + String(rec.workOrderNumber).padStart(4, '0') + ' · ' : '') + (rec.title || '')) : tag === 'cr' ? 'Clean & refill' : (rec.title || '');
+      const sub = k === 'wo' ? ((rec.workOrderNumber ? '#' + String(rec.workOrderNumber).padStart(4, '0') + ' · ' : '') + (rec.title || '')) : tag === 'cr' ? '' : (rec.title || '');   // the badge already says it (Nov 3)
       const right = [];
       const done = it.st === 'done';
       const sel = document.createElement('select');
@@ -20350,7 +20784,7 @@ function acalDayWindow(on){
         acalDraw();
         showToast('Now on ' + acalTechName(sel.value) + '’s route');
       });
-      right.push(sel);
+      if(!done) right.push(sel);   // a finished job shows no technician menu (Nov 3)
       // Move (Nov 1): to another day; the route follows
       if(!done) right.push(moveBtn({
         name: name, what: k === 'wo' ? 'Work order' + (rec.workOrderNumber ? ' #' + String(rec.workOrderNumber).padStart(4, '0') : '') : 'Task' + (c && rec.title ? ': ' + rec.title : ''),
@@ -20394,7 +20828,17 @@ function acalDayWindow(on){
         });
         right.push(bin);
       }
-      row(name, sub, it.st, right);
+      row(name, sub, it.st, right, {done: done, items: (Array.isArray(rec.extraWork) ? rec.extraWork : []).filter(li => li && String(li.description || '').trim()), save: async items=>{
+        // Extra work on a work order, task or Clean & refill (Nov 3): each item a
+        // box to tick on the job
+        const list = lsGet(kinds[k][0]) || [];
+        const x = list.find(y => y && String(y.id) === String(rec.id)); if(!x) return false;
+        if(items.length) x.extraWork = items; else delete x.extraWork;
+        if(!lsSet(kinds[k][0], list)){ showToast('Could not save — the phone is full'); return false; }
+        if(k === 'tk'){ try{ if(typeof tasks !== 'undefined') tasks = list; }catch(e){} }
+        queueOfficeWork(kinds[k][1], x.id, false);
+        return true;
+      }}, tag);
     });
   });
   return sheet;
@@ -23726,6 +24170,10 @@ function buildJobEmailHtml(customer, job, techName){
     });
     if(rows && withPrices) rows += '<tr><td style="padding:7px 0;font-weight:700;color:#16302E;">Total</td>'
       + '<td style="padding:7px 0;text-align:right;font-weight:700;color:#16302E;">$' + total.toFixed(2) + '</td></tr>';
+    // The extra work done, ticked (Nov 3), no prices
+    (job.doneExtraWork || []).forEach(t=>{
+      rows += '<tr><td style="' + cell + '">' + esc(t) + '</td><td style="' + cell + 'text-align:right;color:#2E8B57;font-weight:700;">\u2713</td></tr>';
+    });
   } else {
     rows = '<tr><td style="' + cell + '">' + esc(what) + '</td><td style="' + cell + '"></td></tr>';
     // A drain: the autofill valve and pump checks (Nov 1)
@@ -25054,7 +25502,7 @@ function reloadAppChemConfig(){ chemConfig = loadChemConfig(); }
   function sortKeyName(name){ return displayName(name).toLowerCase(); }
 
   // ---- Sending to the office ----
-  const TECH_FIELDS = ['photoOptional', 'photoRules', 'requireGatePhoto', 'requireSaltCellPhoto', 'requireSkipProof', 'allowVideo'];
+  const TECH_FIELDS = ['photoOptional', 'photoRules', 'requireGatePhoto', 'requireSaltCellPhoto', 'requireSkipProof', 'requireSkipJobProof', 'allowVideo'];
   const SETUP_KEYS = ['photoEveryone', 'photoDefaults', 'chemConfig'];
   let seen = null;                       // what was last agreed with the office
   const snapshot = ()=>{
@@ -25151,7 +25599,8 @@ function photoEveryoneOn(step, key){
 var setPhotoEveryone = function(step, key, on){
   const all = photoEveryone();
   all[step] = all[step] || {};
-  if(on) all[step][key] = true; else delete all[step][key];
+  if(step === 'skipjob') all[step][key] = !!on;      // on by default, so "off" is written down
+  else if(on) all[step][key] = true; else delete all[step][key];
   lsSet('photoEveryone', all);
 };
 
@@ -25297,7 +25746,7 @@ function photoTechnicianList(step, bodies){
     return box;
   }
   // The gate and the skip rule are one each per person; the rest are per body
-  const single = step === 'gate' || step === 'skip' || step === 'video' || step === 'saltcell';
+  const single = step === 'gate' || step === 'skip' || step === 'skipjob' || step === 'video' || step === 'saltcell';
   const columns = single
     ? [[step, '']]
     : PHOTO_BODIES.filter(([key]) => bodies[key]);
@@ -25305,7 +25754,7 @@ function photoTechnicianList(step, bodies){
   // is only ever optional, so its tick is all there is
   // After photo is always shown now, so it has no Optional button (Oct 3)
   // Skip has Optional too (Oct 3): the photo-and-note window, nothing in it needed
-  const offersOptional = step !== 'video' && step !== 'after' && step !== 'saltcell';   // it's the button or nothing
+  const offersOptional = step !== 'video' && step !== 'after' && step !== 'saltcell' && step !== 'skipjob';   // it's the button or nothing
 
   // Always the technician as they are in the list right now. A sync replaces
   // the whole list with fresh objects, so the one captured when this was drawn
@@ -25318,6 +25767,7 @@ function photoTechnicianList(step, bodies){
     return step === 'gate' ? cur.requireGatePhoto === true
       : step === 'saltcell' ? cur.requireSaltCellPhoto === true
       : step === 'skip' ? cur.requireSkipProof === true
+      : step === 'skipjob' ? cur.requireSkipJobProof === true
       : step === 'video' ? cur.allowVideo === true
       : photoRuleFor(cur, step, key) === true;
   };
@@ -25326,6 +25776,7 @@ function photoTechnicianList(step, bodies){
     if(step === 'gate') cur.requireGatePhoto = on;
     else if(step === 'saltcell') cur.requireSaltCellPhoto = on;
     else if(step === 'skip') cur.requireSkipProof = on;
+    else if(step === 'skipjob') cur.requireSkipJobProof = on;
     else if(step === 'video') cur.allowVideo = on;
     else setPhotoRule(cur, step, key, on);
   };
@@ -25491,6 +25942,7 @@ function photoRowCountText(step, bodies){
     step === 'gate' ? (t.requireGatePhoto === true || photoEveryoneOn('gate', 'gate'))
     : step === 'saltcell' ? (t.requireSaltCellPhoto === true || photoEveryoneOn('saltcell', 'saltcell'))
     : step === 'skip' ? (t.requireSkipProof === true || photoEveryoneOn('skip', 'skip'))
+    : step === 'skipjob' ? (t.requireSkipJobProof === true || photoEveryoneOn('skipjob', 'skipjob'))
     : PHOTO_BODIES.some(([k]) => bodies[k] && (photoRuleFor(t, step, k) || photoEveryoneOn(step, k)))
   );
   const optional = technicians.filter(t => must.indexOf(t) === -1
@@ -25540,6 +25992,10 @@ function renderPhotoRequirements(){
      bodies: {}, oneTick: true},
     // Not a photo step of its own: what a technician must do before skipping
     {step: 'skip', label: 'Skip body of water photo and note', off: false,
+     why: '', bodies: {}, oneTick: true},
+    // Skip service / Skip job on the Today list. On for everyone to start with.
+    {step: 'skipjob', label: 'Skip service / job photo and note', off: false,
+     note: 'When Skip service or Skip job is pressed on the Today list, the technician has to take a photo and write a note before it can be skipped.',
      why: '', bodies: {}, oneTick: true}
   ];
   const own = photoTasks().map(task => ({
@@ -26257,6 +26713,285 @@ function marqueeIfCut(el){
       try{ s.el.click(); }catch(err){}
     }, 260);
   }, {capture: true, passive: true});
+})();
+</script>
+<script>
+const EMAIL_LOGO_BUILDERS = ["buildReportEmailHtml","buildJobEmailHtml","awcQuoteEmailHtml"];
+// ---- Your logo in the emails (Nov 5) ----
+// The logo and where it sits are kept with the report email style, so both
+// the website and the phones read the same. Every emailed header is passed
+// through emailApplyLogo; on the way out, the picture becomes an attachment
+// the email refers to by id (mail apps block pictures embedded as text).
+function emailLogoSettings(){
+  const s = lsGet('reportEmailStyle') || {};
+  return {logo: typeof s.logo === 'string' && s.logo.indexOf('data:image/') === 0 ? s.logo : '',
+          pos: ['beside', 'above', 'badge'].indexOf(s.logoPos) !== -1 ? s.logoPos : 'beside'};
+}
+function emailApplyLogo(html){
+  html = String(html || '');
+  const L = emailLogoSettings();
+  if(!L.logo || html.indexOf('data-weir-logo') !== -1) return html;
+  const re = /<tr><td style="background:(#[0-9A-Fa-f]{3,6});padding:22px 26px;">([\s\S]*?)<\/td><\/tr>/;
+  const m = html.match(re);
+  if(!m) return html;
+  const colour = m[1], inner = m[2];
+  const img = (h, extra)=> '<img data-weir-logo="1" src="' + L.logo + '" height="' + h + '" alt="" '
+    + 'style="display:block;border:0;height:' + h + 'px;width:auto;max-width:240px;' + extra + '">';
+  let out;
+  if(L.pos === 'above'){
+    out = '<tr><td style="background:#FFFFFF;padding:22px 26px 16px;text-align:center;border-bottom:1px solid #E6E9E8;">'
+      + '<img data-weir-logo="1" src="' + L.logo + '" height="96" alt="" style="display:inline-block;border:0;height:96px;width:auto;max-width:240px;"></td></tr>'
+      + '<tr><td style="background:' + colour + ';padding:16px 26px;text-align:center;">' + inner + '</td></tr>';
+  } else if(L.pos === 'badge'){
+    out = '<tr><td style="background:' + colour + ';padding:20px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+      + '<td style="vertical-align:middle;">' + inner + '</td>'
+      + '<td align="right" style="vertical-align:middle;padding-left:14px;">'
+      + '<table role="presentation" align="right" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#FFFFFF;border-radius:12px;padding:5px;">' + img(54, 'border-radius:8px;') + '</td></tr></table></td></tr></table></td></tr>';
+  } else {
+    out = '<tr><td style="background:' + colour + ';padding:18px 26px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+      + '<td style="padding-right:14px;vertical-align:middle;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#FFFFFF;border-radius:10px;padding:4px;">' + img(48, 'border-radius:7px;') + '</td></tr></table></td>'
+      + '<td style="vertical-align:middle;">' + inner + '</td></tr></table></td></tr>';
+  }
+  return html.replace(re, function(){ return out; });
+}
+(function emailLogoHooks(){
+  try{
+    // Every email builder that has the coloured header
+    EMAIL_LOGO_BUILDERS.forEach(function(name){
+      const f = window[name];
+      if(typeof f !== 'function') return;
+      window[name] = function(){ return emailApplyLogo(f.apply(this, arguments)); };
+    });
+    // On its way to the sender: the picture goes along as an attachment
+    const realFetch = window.fetch;
+    window.fetch = function(url, opts){
+      try{
+        if(typeof url === 'string' && url.indexOf('/functions/v1/send-report') !== -1
+           && opts && typeof opts.body === 'string' && opts.body.indexOf('data-weir-logo') !== -1){
+          const b = JSON.parse(opts.body);
+          const m = typeof b.html === 'string'
+            ? b.html.match(/<img data-weir-logo="1" src="data:(image\/[a-z]+);base64,([^"]+)"/) : null;
+          if(m){
+            b.logo = m[2]; b.logoType = m[1];
+            b.html = b.html.replace(/(<img data-weir-logo="1" src=")data:[^"]*"/g, '$1cid:logo"');
+            opts = Object.assign({}, opts, {body: JSON.stringify(b)});
+          }
+        }
+      }catch(e){}
+      return realFetch.call(this, url, opts);
+    };
+  }catch(e){}
+})();
+</script>
+<script>
+// Photos on the service report screen open full size when pressed (Nov 5).
+// One listener on the report area covers every report layout; photos that
+// already open themselves (the work order ones) are left to do so.
+(function reportPhotoZoom(){
+  const out = document.getElementById('reportOutput');
+  if(!out) return;
+  const st = document.createElement('style');
+  st.textContent = '#reportOutput .report-doc img{cursor:zoom-in;}';
+  document.head.appendChild(st);
+  out.addEventListener('click', (e)=>{
+    const img = e.target && e.target.closest ? e.target.closest('img') : null;
+    if(!img || !out.contains(img)) return;
+    if(img.style.cursor === 'zoom-in') return;       // opens itself already
+    const src = img.currentSrc || img.src;
+    if(!src || typeof openPhotoFullSize !== 'function') return;
+    e.preventDefault();
+    openPhotoFullSize(src);
+  });
+})();
+</script>
+<script>
+// Pick several customers on the Today list, then move them together (Nov 5).
+// A long press picks the first; then a press picks or unpicks any other.
+// Pressing anywhere that is not a customer, or the X, puts the list back.
+(function multiSelect(){
+  const list = document.getElementById('homeCustomerList');
+  const head = document.getElementById('homeHeaderCard');
+  if(!list || !head) return;
+  let on = false, ctx = '', swallowUntil = 0, swallowRow = null, timer = null, sx = 0, sy = 0;
+  const picked = new Set();
+
+  const st = document.createElement('style');
+  st.textContent = '#homeHeaderCard.msel-on > :not(#homeHeadRow):not(#mselBar){display:none !important;}'
+    + '.cust-row.msel-picked{background:var(--teal-pale) !important;box-shadow:inset 3px 0 0 var(--teal-mid);}'
+    + '.msel-dot{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+    + 'border:2px solid #B7C7C4;background:#fff;color:#fff;font-size:14px;font-weight:700;margin-right:10px;box-sizing:border-box;}'
+    + '.cust-row.msel-picked .msel-dot{border-color:var(--teal-mid);background:var(--teal-mid);}';
+  document.head.appendChild(st);
+
+  const rowOf = (el)=> el && el.closest ? el.closest('#homeCustomerList > .cust-row[data-customer-row]') : null;
+  const rows = ()=> Array.prototype.slice.call(list.querySelectorAll(':scope > .cust-row[data-customer-row]'));
+  const ctxNow = ()=> [selectedHomeDay, weekOffset, adminViewTechId || ''].join('|');
+
+  function bar(){
+    let b = document.getElementById('mselBar');
+    if(b) return b;
+    b = document.createElement('div');
+    b.id = 'mselBar';
+    b.style.cssText = 'margin-top:14px;padding-top:12px;border-top:1px solid var(--line);';
+    b.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+      + '<div id="mselCount" style="font-size:14px;font-weight:700;color:var(--teal-deep);"></div>'
+      + '<button type="button" id="mselX" aria-label="Done" style="width:30px;height:30px;padding:0;border-radius:50%;border:1.5px solid var(--line);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>'
+      + '<div style="display:flex;gap:6px;">'
+      + '<button type="button" class="btn btn-primary" id="mselMove" style="width:auto;flex:1 1 0;min-width:0;padding:9px 6px;font-size:13px;white-space:nowrap;">Reschedule</button>'
+      + '<button type="button" class="btn btn-ghost" id="mselAll" style="width:auto;flex:1 1 0;min-width:0;padding:9px 6px;font-size:13px;white-space:nowrap;">Select all</button>'
+      + '<button type="button" class="btn btn-ghost" id="mselNone" style="width:auto;flex:1 1 0;min-width:0;padding:9px 6px;font-size:13px;white-space:nowrap;">Unselect all</button></div>';
+    head.appendChild(b);
+    b.querySelector('#mselX').addEventListener('click', exit);
+    b.querySelector('#mselAll').addEventListener('click', ()=>{ rows().forEach(r => picked.add(r.dataset.customerRow)); paint(); });
+    b.querySelector('#mselNone').addEventListener('click', ()=>{ picked.clear(); paint(); });
+    b.querySelector('#mselMove').addEventListener('click', openMove);
+    return b;
+  }
+
+  function paint(){
+    if(!on) return;
+    const b = bar();
+    const present = new Set();
+    rows().forEach(r=>{
+      const id = r.dataset.customerRow;
+      present.add(id);
+      const yes = picked.has(id);
+      r.classList.toggle('msel-picked', yes);
+      let dot = r.querySelector(':scope > .msel-dot');
+      if(!dot){ dot = document.createElement('div'); dot.className = 'msel-dot'; r.insertBefore(dot, r.firstChild); }
+      dot.textContent = yes ? '✓' : '';
+    });
+    Array.from(picked).forEach(id => { if(!present.has(id)) picked.delete(id); });
+    b.querySelector('#mselCount').textContent = picked.size + ' selected';
+    const mv = b.querySelector('#mselMove');
+    mv.disabled = !picked.size; mv.style.opacity = picked.size ? '' : '0.5';
+  }
+
+  function enter(){
+    on = true; ctx = ctxNow();
+    head.classList.add('msel-on');
+    bar();
+  }
+  function exit(){
+    on = false; picked.clear();
+    head.classList.remove('msel-on');
+    const b = document.getElementById('mselBar'); if(b) b.remove();
+    list.querySelectorAll('.msel-dot').forEach(d => d.remove());
+    list.querySelectorAll('.msel-picked').forEach(r => r.classList.remove('msel-picked'));
+  }
+
+  // Long press on a customer
+  const cancelTimer = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
+  list.addEventListener('pointerdown', (e)=>{
+    const row = rowOf(e.target);
+    if(!row || e.target.closest('button, a, input, select, .route-grip')) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    sx = e.clientX; sy = e.clientY;
+    cancelTimer();
+    timer = setTimeout(()=>{
+      timer = null;
+      if(!row.isConnected) return;
+      if(!on) enter();
+      picked.add(row.dataset.customerRow);
+      swallowUntil = Date.now() + 1500; swallowRow = row;
+      try{ if(navigator.vibrate) navigator.vibrate(15); }catch(err){}
+      paint();
+    }, 500);
+  }, true);
+  list.addEventListener('pointermove', (e)=>{
+    if(timer && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) cancelTimer();
+  }, true);
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => list.addEventListener(t, cancelTimer, true));
+  list.addEventListener('contextmenu', (e)=>{ if(rowOf(e.target)) e.preventDefault(); }, true);
+
+  // A press on a customer while picking picks or unpicks it
+  list.addEventListener('click', (e)=>{
+    const row = rowOf(e.target);
+    if(!row) return;
+    // The click that ends the long press itself is not a pick
+    if(row === swallowRow && Date.now() < swallowUntil){ swallowRow = null; e.stopPropagation(); e.preventDefault(); return; }
+    if(!on) return;
+    e.stopPropagation(); e.preventDefault();
+    const id = row.dataset.customerRow;
+    if(picked.has(id)) picked.delete(id); else picked.add(id);
+    paint();
+  }, true);
+
+  // A press on anything that is not a customer puts everything back
+  document.addEventListener('click', (e)=>{
+    if(!on) return;
+    const t = e.target;
+    if(t.closest && (t.closest('#homeCustomerList > .cust-row[data-customer-row]') || t.closest('#mselBar') || t.closest('.confirm-overlay'))) return;
+    exit();
+  }, true);
+
+  // The list is drawn again after most things; keep the picks showing
+  const baseRender = window.renderHomeList;
+  window.renderHomeList = function(){
+    const r = baseRender.apply(this, arguments);
+    if(on){ if(ctx !== ctxNow()) exit(); else paint(); }
+    return r;
+  };
+
+  function openMove(){
+    if(!picked.size) return;
+    const ids = Array.from(picked);
+    const who = ids.map(id => (customers.find(c => c && c.id === id) || {}).name).filter(Boolean);
+    const fromISO = isoForDay(selectedHomeDay);
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    const box = document.createElement('div');
+    box.className = 'confirm-box';
+    box.style.cssText = 'max-width:400px;width:100%;text-align:left;';
+    box.innerHTML = '<h3 style="font-size:16px;margin:0 0 4px;"></h3>'
+      + '<p data-names style="font-size:12.5px;color:var(--muted);margin:0 0 12px;"></p>'
+      + '<div class="field"><label>Move to</label><select data-day></select></div>'
+      + '<div style="display:flex;flex-direction:column;gap:8px;margin:2px 0 14px;font-size:13.5px;font-weight:600;">'
+      + '<label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;margin:0;"><input type="radio" name="mselWhen" value="once" checked style="width:auto;margin:0;"> Just this week</label>'
+      + '<label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;margin:0;"><input type="radio" name="mselWhen" value="always" style="width:auto;margin:0;"> Every week</label></div>'
+      + '<div class="btn-row"><button type="button" class="btn btn-ghost" data-cancel>Cancel</button><button type="button" class="btn btn-primary" data-go>Move</button></div>';
+    box.querySelector('h3').textContent = 'Reschedule ' + ids.length + (ids.length === 1 ? ' customer' : ' customers');
+    box.querySelector('[data-names]').textContent = who.join(', ');
+    const sel = box.querySelector('[data-day]');
+    DAYS_OF_WEEK.forEach(d=>{
+      const iso = isoForDay(d);
+      const o = document.createElement('option');
+      o.value = d;
+      o.textContent = d + ' · ' + new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+      if(d === selectedHomeDay) o.disabled = true;
+      sel.appendChild(o);
+    });
+    // Starts on the next day along
+    const nx = DAYS_OF_WEEK[(DAYS_OF_WEEK.indexOf(selectedHomeDay) + 1) % 7];
+    sel.value = nx;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+    box.querySelector('[data-cancel]').addEventListener('click', shut);
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) shut(); });
+    box.querySelector('[data-go]').addEventListener('click', async ()=>{
+      const day = sel.value;
+      if(!day || day === selectedHomeDay) return;
+      const always = box.querySelector('input[name="mselWhen"]:checked').value === 'always';
+      const n = ids.length;
+      if(always){
+        ids.forEach(id=>{
+          const c = customers.find(x => x && x.id === id);
+          if(c){ c.day = day; clearMovesFor(c.id); }
+        });
+        try{ await saveCustomers(); }catch(err){ console.warn('save failed', err); }
+      } else {
+        const toISO = isoForDay(day);
+        ids.forEach(id => saveMoveJustOnce(id, fromISO, toISO, null));
+      }
+      shut();
+      exit();
+      renderHomeList();
+      showToast(always ? n + (n === 1 ? ' customer' : ' customers') + ' now serviced on ' + day + 's'
+                       : n + (n === 1 ? ' customer' : ' customers') + ' moved to ' + day);
+    });
+  }
 })();
 </script>
 </body>

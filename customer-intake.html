@@ -2129,6 +2129,27 @@ textarea:not([readonly]),[contenteditable="true"],[contenteditable=""]{caret-col
       <h2>How your reports look</h2>
       <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">The service report your customers receive. Your company name, phone and license come from the other tabs.</p>
 
+      <!-- Your logo (Nov 5): shown in the header of every email -->
+      <div class="field">
+        <label>Your logo</label>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div id="acctLogoThumb" style="width:84px;height:84px;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;background:#fff;"></div>
+          <div style="flex:1;min-width:200px;">
+            <div class="btn-row" style="margin:0 0 6px;">
+              <button type="button" class="btn btn-ghost" id="acctLogoPick" style="width:auto;">Upload logo</button>
+              <button type="button" class="btn btn-ghost" id="acctLogoRemove" style="width:auto;" aria-label="Remove logo" title="Remove logo">Remove</button>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);">PNG or JPG, square or wide. It is shrunk to fit the email.</div>
+          </div>
+        </div>
+        <input type="file" accept="image/png,image/jpeg,image/webp" id="acctLogoFile" style="display:none;">
+        <div id="acctLogoWhere" style="display:none;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <label style="display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:0;cursor:pointer;"><input type="radio" name="acctLogoPos" value="beside" style="width:auto;margin:0;"> Beside the name</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:0;cursor:pointer;"><input type="radio" name="acctLogoPos" value="above" style="width:auto;margin:0;"> Above the header</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:0;cursor:pointer;"><input type="radio" name="acctLogoPos" value="badge" style="width:auto;margin:0;"> Badge on the right</label>
+        </div>
+      </div>
+
       <div class="field">
         <label>Opening line</label>
         <input id="acctEmailGreeting" placeholder="Here's the report from today's visit.">
@@ -2214,19 +2235,6 @@ textarea:not([readonly]),[contenteditable="true"],[contenteditable=""]{caret-col
       <h2 style="margin-bottom:0;">Settings</h2>
     </div>
 
-    <!-- Colour-blind mode (Nov 1): this device only -->
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <h2 style="margin:0;">Color-blind mode</h2>
-        <label class="toggle-switch">
-          <input type="checkbox" id="settingColourBlind">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;">Job and status colors that stay easy to tell apart with any kind of color blindness. Just for this device.</p>
-      <div id="colourBlindKey" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;"></div>
-    </div>
-
     <div class="card">
       <h2>Backup &amp; restore</h2>
       <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px;">Download a snapshot of everything — customers, technicians, readings, equipment, routes, and settings. Keep it somewhere safe. If data is ever changed or deleted by mistake, restoring a backup puts it all back.</p>
@@ -2247,26 +2255,19 @@ textarea:not([readonly]),[contenteditable="true"],[contenteditable=""]{caret-col
       </div>
       <p id="syncStatus" style="font-size:11.5px;color:var(--muted);margin:12px 0 0;">Not synced yet on this device.</p>
     </div>
-      <!-- The "Last 4 weeks" readings table on the phones' visits: on or off for the company -->
-      <div class="card">
-        <div class="field">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;">
-            <h2 style="margin:0;">Service history table</h2>
-            <label class="toggle-switch">
-              <input type="checkbox" id="settingRecentReadings">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0;">Shows the last 3 months of readings at the top of each visit.</p>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;">
-            <span style="font-size:13.5px;font-weight:600;">Show chemicals added too</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="settingRecentDosages">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
+
+    <!-- Colour-blind mode (Nov 1): this device only -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h2 style="margin:0;">Color-blind mode</h2>
+        <label class="toggle-switch">
+          <input type="checkbox" id="settingColourBlind">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;">Job and status colors that stay easy to tell apart with any kind of color blindness. Just for this device.</p>
+      <div id="colourBlindKey" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;"></div>
+    </div>
 
       <!-- Water balance (LSI) is hidden until calcium hardness and water temperature
      are part of the readings. The calculator and the readout are still in the
@@ -5193,7 +5194,7 @@ function openProductServiceModal(opts){
   // services (and uncategorised) get a price and a description; chemicals a
   // price, a unit and Extra charge chemical, with its abbreviation and colour.
   overlay.innerHTML = `
-    <div class="confirm-box ps-window" style="max-width:420px;">
+    <div class="confirm-box ps-window" style="max-width:460px;">
       <!-- Add line item (Nov 1) -->
       <h3 style="font-size:15px;margin:0 0 4px;">Add line item</h3>
       <p style="font-size:11.5px;color:var(--muted);margin:0 0 14px;">Pick a category, give it a name and a price, and it’s ready to drop onto any quote or work order.</p>
@@ -5220,7 +5221,7 @@ function openProductServiceModal(opts){
       <div data-for="extra" style="display:none;">
         <div class="field"><label>Abbreviation</label><input id="psAbbr" maxlength="4" placeholder="e.g. MA">
           <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Four characters at most. It has to fit the billing column.</div></div>
-        <div class="field"><label>Color</label><div id="psExtraDots" style="display:flex;gap:10px;flex-wrap:wrap;"></div></div>
+        <div class="field"><label>Color</label><div id="psExtraDots" style="display:flex;gap:10px;justify-content:space-between;"></div></div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="psSave" style="flex:1;">Save</button>
@@ -5254,7 +5255,7 @@ function openProductServiceModal(opts){
       const d = document.createElement('button');
       d.type = 'button';
       d.setAttribute('aria-label', 'Color');
-      d.style.cssText = 'width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:3px solid #fff;cursor:pointer;background:' + c + ';'
+      d.style.cssText = 'flex:0 1 34px;width:34px;max-width:34px;aspect-ratio:1/1;height:auto;min-width:0;padding:0;border-radius:50%;border:3px solid #fff;cursor:pointer;background:' + c + ';'
         + 'box-shadow:0 0 0 ' + (c === colour ? '2px var(--teal-deep)' : '1px var(--line)') + ';';
       d.addEventListener('click', ()=>{ colour = c; drawDots(); });
       dots.appendChild(d);
@@ -6675,6 +6676,7 @@ function fcPickCustomersForDay(iso, after){
     + '<p style="font-size:12.5px;color:var(--muted);margin:0 0 8px;">Tick the customers. They go on this day on their own, not in a group.</p>'
     + '<input type="text" data-search placeholder="Search customers" autocomplete="off" style="margin:0 0 6px;">'
     + '<div data-list style="flex:1;overflow-y:auto;"></div>'
+    + '<div class="field" id="fcpRpHost" style="display:none;margin:10px 0 0;"></div>'
     + '<div class="btn-row" style="margin-top:12px;"><button type="button" class="btn btn-primary" data-go style="flex:1;">Add to this day</button><button type="button" class="btn btn-ghost" data-cancel style="width:auto;">Cancel</button></div>';
   box.querySelector('h3').textContent = 'Add a customer to ' + nice;
   overlay.appendChild(box);
@@ -6684,18 +6686,28 @@ function fcPickCustomersForDay(iso, after){
   const go = box.querySelector('[data-go]');
   const picked = new Set();
   const upd = ()=>{ go.textContent = picked.size > 1 ? 'Add ' + picked.size + ' customers to this day' : 'Add to this day'; };
+  // Where in the route (Nov 2): the work order and task picker, for one customer;
+  // with more than one, each goes under its own customer
+  const ownTech = id => String((customers.find(x => x && x.id === id) || {}).technicianId || '');
+  const rp = makeRoutePlace({host: 'fcpRpHost', active: ()=> true, date: ()=> iso,
+    techIds: ()=> Array.from(new Set(Array.from(picked).map(ownTech).filter(Boolean))),
+    customerIds: ()=> Array.from(picked),
+    label: ()=> 'Filter clean' + (picked.size === 1 ? ' \u00b7 ' + displayName((customers.find(x => x && x.id === Array.from(picked)[0]) || {}).name || '') : ''),
+    stopsFor: (t, d)=> twRouteFor(t, d).list, techName: id => twTechName(id), nameOf: c => displayName(c.name || '')});
   function drawList(){
     const term = search.value.trim().toLowerCase();
     listEl.innerHTML = '';
     const shown = all.filter(c => !term || [c.name, c.address, c.phone, c.email].some(v => String(v || '').toLowerCase().indexOf(term) !== -1));
     if(!shown.length) listEl.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:8px 2px;">Nobody matches.</div>';
+    const addR = jobNameOnlyRow(search.value, name=>{ const c = addNameOnlyCustomer(name); all.push(c); picked.add(c.id); search.value = ''; drawList(); rp.refresh(); }, 'padding:8px 2px;cursor:pointer;border-top:1px solid var(--line);font-size:13px;');
+    if(addR) listEl.insertBefore(addR, listEl.firstChild);
     shown.slice(0, 200).forEach(c=>{
       const row = document.createElement('label');
       row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 2px;border-top:1px solid var(--line);font-size:13px;cursor:pointer;margin:0;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink);';
       const cb = document.createElement('input');
       cb.type = 'checkbox'; cb.style.cssText = 'width:auto;margin:0;';
       cb.checked = picked.has(c.id);
-      cb.addEventListener('change', ()=>{ if(cb.checked) picked.add(c.id); else picked.delete(c.id); upd(); });
+      cb.addEventListener('change', ()=>{ if(cb.checked) picked.add(c.id); else picked.delete(c.id); upd(); rp.refresh(); });
       const nm = document.createElement('b'); nm.textContent = displayName(c.name);
       nm.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
       const tech = document.createElement('span');
@@ -6712,11 +6724,27 @@ function fcPickCustomersForDay(iso, after){
   box.querySelector('[data-cancel]').addEventListener('click', ()=> overlay.remove());
   go.addEventListener('click', ()=>{
     if(!picked.size){ showToast('Tick a customer first'); return; }
+    const place = rp.value();
     overlay.remove();
     const g = fgSoloFor(iso);
-    picked.forEach(id => { if((g.customerIds || []).indexOf(id) === -1) g.customerIds.push(id); });
-    if(after) after();
-    showToast(picked.size === 1 ? 'Added to ' + nice : picked.size + ' customers added to ' + nice);
+    // Straight to the app (Nov 2), as + Single filter clean does
+    const wasSent = !!g.finalized;
+    g.custPlace = g.custPlace || {};
+    picked.forEach(id=>{
+      if((g.customerIds || []).indexOf(id) === -1) g.customerIds.push(id);
+      if(typeof place === 'string') g.custPlace[id] = place; else delete g.custPlace[id];
+      if(g.custHold) delete g.custHold[id];
+    });
+    if(!wasSent){
+      // Anyone already on that day's list but not sent yet stays as they were
+      g.custHold = g.custHold || {};
+      (g.customerIds || []).forEach(id=>{ if(!picked.has(id)) g.custHold[id] = true; });
+      scheduleFilterGroup(g);
+    }
+    if(after) after();   // saves, and puts each one on its technician's route
+    const noTech = Array.from(picked).filter(id => !ownTech(id));
+    showToast(noTech.length ? (noTech.length === 1 ? displayName((customers.find(x => x && x.id === noTech[0]) || {}).name || 'A customer') + ' has' : noTech.length + ' customers have') + ' no technician, so ' + (noTech.length === 1 ? 'it isn\u2019t' : 'they aren\u2019t') + ' in the app yet'
+      : picked.size === 1 ? 'Added to the route for ' + nice : picked.size + ' customers added to the route for ' + nice);
   });
 }
 
@@ -6815,7 +6843,11 @@ function openSingleFilterClean(){
     if(!term){ sug.style.display = 'none'; return; }
     const list = customers.filter(c => c && !c.deleted && c.active !== false && picked.indexOf(c.id) === -1
       && [c.name, c.address, c.phone, c.email].some(v => String(v || '').toLowerCase().indexOf(term) !== -1)).slice(0, 12);
-    if(!list.length){ sug.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:9px 12px;">Nobody matches.</div>'; sug.style.display = 'block'; return; }
+    const addRow = ()=>{
+      const r = jobNameOnlyRow(search.value, name=>{ const c = addNameOnlyCustomer(name); picked.push(c.id); search.value = ''; drawSug(); drawChips(); });
+      if(r) sug.appendChild(r);
+    };
+    if(!list.length){ sug.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:9px 12px;">Nobody matches.</div>'; addRow(); sug.style.display = 'block'; return; }
     list.forEach(c=>{
       const row = document.createElement('div');
       row.className = 'press-row';
@@ -6826,6 +6858,7 @@ function openSingleFilterClean(){
       row.addEventListener('mousedown', e=>{ e.preventDefault(); picked.push(c.id); search.value = ''; drawSug(); drawChips(); });
       sug.appendChild(row);
     });
+    addRow();
     sug.style.display = 'block';
   }
   search.addEventListener('input', drawSug);
@@ -6842,6 +6875,8 @@ function openSingleFilterClean(){
       [!iso, dateEl, 'Set a date first.'],
       [!!noTech.length, techSel, (noTech.length === 1 ? displayName((customers.find(x => x.id === noTech[0]) || {}).name || '') + ' has' : 'Some have') + ' no technician of their own. Choose one.']
     ])) return;
+    // Someone typed in by name goes to the technician chosen, so their phone has them
+    { let ch = false; picked.forEach(id=>{ const c = customers.find(x => x && x.id === id); if(c && c.nameOnly && !c.technicianId && tech){ c.technicianId = String(tech); ch = true; } }); if(ch) saveCustomers(); }
     const g = fgSoloFor(iso);
     const wasSent = !!g.finalized;
     g.custTech = g.custTech || {}; g.custPhoto = g.custPhoto || {}; g.custEmail = g.custEmail || {};
@@ -8801,6 +8836,9 @@ function fgChipState(g, cid){
 function fgCustPhoto(g, cid){ return (g && g.custPhoto && typeof g.custPhoto[cid] === 'boolean') ? g.custPhoto[cid] : true; }
 // Email the customer, for one customer on their own (Oct 25); otherwise the group's
 function fgCustEmail(g, cid){ return (g && g.custEmail && typeof g.custEmail[cid] === 'boolean') ? g.custEmail[cid] : (!g || g.emailCustomer !== false); }
+// Where in the route one customer's filter clean goes (Nov 2): the stop it comes
+// straight after, '' for first; not set means under its own customer
+function fgCustPlace(g, cid){ return (g && g.custPlace && typeof g.custPlace[cid] === 'string') ? g.custPlace[cid] : undefined; }
 function fgCustTech(g, cid){
   const own = g && g.custTech && g.custTech[cid];
   if(own) return own;
@@ -8906,12 +8944,14 @@ function fgSyncScheduledInner(){
         // Added to the group after it was scheduled: onto the route too
         // (a customer on their own has their own technician, Oct 19)
         if(!g.date || !fgCustTech(g, cid)) return;
-        sched.push({
+        const nsc = {
           id: 'fc_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
           groupId: g.id, groupName: g.name, customerId: cid, technicianId: fgCustTech(g, cid),
           date: g.date, order: i, photoRequired: fgCustPhoto(g, cid), lineItems: fgCustLineItems(g, cid),
           emailCustomer: fgCustEmail(g, cid), status: 'scheduled'
-        });
+        };
+        if(fgCustPlace(g, cid) !== undefined) nsc.placeAfter = fgCustPlace(g, cid);
+        sched.push(nsc);
         changed = true;
         return;
       }
@@ -8922,6 +8962,10 @@ function fgSyncScheduledInner(){
         const tech = fgCustTech(g, cid);
         if(tech) want.technicianId = tech;
         Object.keys(want).forEach(k=>{ if(sc[k] !== want[k]){ sc[k] = want[k]; changed = true; } });
+        // Their place in the route (Nov 2): the group's word, once it keeps any
+        const wpl = fgCustPlace(g, cid);
+        if(wpl !== undefined){ if(sc.placeAfter !== wpl){ sc.placeAfter = wpl; changed = true; } }
+        else if(g.custPlace && 'placeAfter' in sc){ delete sc.placeAfter; changed = true; }
         // Extra work for this customer (Oct 13), compared as a whole
         const li = fgCustLineItems(g, cid);
         if(JSON.stringify(sc.lineItems || []) !== JSON.stringify(li)){ sc.lineItems = li; changed = true; }
@@ -9488,6 +9532,22 @@ function openGroupCustomerPicker(g, opts){
       msg.textContent = 'No customers match that search.';
       listEl.appendChild(msg);
     }
+    // Someone not on the list, by name (Nov 5)
+    const oldAdd = listEl.querySelector('[data-add-name]');
+    if(oldAdd) oldAdd.remove();
+    const addR = jobNameOnlyRow(searchEl.value, name=>{
+      const c = addNameOnlyCustomer(name);
+      if(g.technicianId && !c.technicianId){ c.technicianId = String(g.technicianId); try{ saveCustomers(); }catch(e){} }
+      g.customerIds = g.customerIds || [];
+      if(g.customerIds.indexOf(c.id) === -1) g.customerIds.push(c.id);
+      activeIds.add(c.id);
+      searchEl.value = '';
+      saveGroup();
+      drawCount();
+      addRowFor(c);
+      applyGcpSearch();
+    }, 'padding:8px 4px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px;');
+    if(addR){ addR.setAttribute('data-add-name', '1'); listEl.insertBefore(addR, listEl.firstChild); }
   }
 
   searchEl.addEventListener('input', applyGcpSearch);
@@ -9518,10 +9578,7 @@ function openGroupCustomerPicker(g, opts){
   // has finished, so nothing takes the cursor back)
   setTimeout(()=>{ try{ searchEl.focus(); }catch(e){} }, 60);
 
-  active
-    .slice()
-    .sort((a,b)=> sortKeyName(a.name).localeCompare(sortKeyName(b.name)))
-    .forEach(cust=>{
+  const addRowFor = (cust)=>{
       const lbl = document.createElement('label');
       lbl.dataset.search = [cust.name, cust.address, cust.phone, cust.email]
         .filter(Boolean).join(' ').toLowerCase();
@@ -9546,7 +9603,8 @@ function openGroupCustomerPicker(g, opts){
       nameWithAddress(txt, cust);
       lbl.appendChild(txt);
       listEl.appendChild(lbl);
-    });
+  };
+  active.slice().sort((a,b)=> sortKeyName(a.name).localeCompare(sortKeyName(b.name))).forEach(addRowFor);
 
   drawCount();
   const cleanup = ()=>{ document.body.removeChild(overlay); afterClose(); };
@@ -10416,8 +10474,9 @@ function pdEditMany(cids){
     saveCustomers();
     close();
     drainPicked.clear();
+    const did = pdApplyDrainSettings(list.map(c => c.id));
     renderPoolDrains();
-    showToast('Saved for ' + n + ' customers');
+    showToast('Saved for ' + n + ' customers' + (did ? ' \u2014 ' + did : ''));
   });
 }
 
@@ -10504,6 +10563,67 @@ function pdAfterScheduled(entries){
   try{ wcalRefresh(); }catch(err){}
   const days = Array.from(new Set(made)).sort();
   showToast('Clean & refill on ' + (days.length === 1 ? nice(days[0]) : days.length + ' days'));
+}
+
+// A customer's drain settings changed (Nov 3): Customer performs drain, Overnight
+// drain, or the Cleaning day. Their upcoming drains (not done) follow right away:
+//  - Customer performs drain on: off the schedule, route and app, with their Clean & refill
+//  - Overnight drain on: each upcoming drain gets its Clean & refill (a second assignment)
+//  - Overnight drain off: their Clean & refill days come off
+//  - Cleaning day changed: each Clean & refill moves to its drain's day plus the new gap
+// Returns a short sentence for the toast, or '' when nothing upcoming changed.
+function pdApplyDrainSettings(cids){
+  const today = pdToday();
+  const nice = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+  let removed = 0, dropped = 0, made = 0, moved = 0;
+  const gone = new Set();
+  (cids || []).forEach(cid=>{
+    const c = customers.find(x => x && x.id === cid);
+    if(!c) return;
+    const ents = pdCal().filter(e => e && e.customerId === cid && e.date >= today && !((pdCalRecord(e) || {}).status === 'done'));
+    if(!ents.length) return;
+    if(c.drainsSelf){
+      ents.forEach(e=>{ try{ pdCalUnpush(e); }catch(err){} gone.add(e.id); });
+      dropped += pdDropRefill(ents.map(e => e.id));
+      removed += ents.length;
+      return;
+    }
+    if(!pdIsOvernight(c)){
+      dropped += pdDropRefill(ents.map(e => e.id));
+      return;
+    }
+    const fresh = [];
+    ents.forEach(e=>{
+      const want = pdAddDays(e.date, pdCleanDays(c));
+      const t = pdRefillTasks([e.id])[0];
+      if(t){
+        if(t.date !== want){ t.date = want; moved++; }
+        t.photoRequired = pdCustCleanPhoto(c);
+      } else if(want >= today && !tasks.some(x => x && x.id === 'task_refill_' + e.id)){
+        e.refillMade = false; fresh.push(e);
+      }
+    });
+    if(moved) saveTasks();
+    if(fresh.length){
+      // clear the "made once" mark so the sweep and this call may make it again
+      const cal = pdCal();
+      fresh.forEach(f => { const x = cal.find(y => y && y.id === f.id); if(x) delete x.refillMade; });
+      lsSet('drainCalendar', cal);
+      const before = tasks.length;
+      pdAfterScheduled(fresh.map(f => cal.find(y => y && y.id === f.id) || f));
+      made += tasks.length - before;
+    }
+  });
+  if(gone.size) pdCalSave(pdCal().filter(e => !gone.has(e.id)));
+  try{ renderTaskList(); }catch(err){}
+  try{ wcalRefresh(); }catch(err){}
+  try{ renderPoolDrains(); }catch(err){}
+  const bits = [];
+  if(removed) bits.push(removed + (removed === 1 ? ' upcoming drain' : ' upcoming drains') + ' taken off');
+  if(made) bits.push(made + ' Clean & refill added');
+  if(moved) bits.push(moved + ' Clean & refill moved');
+  if(dropped) bits.push(dropped + ' Clean & refill taken off');
+  return bits.join(', ');
 }
 
 // The drain knows its clean & refill was made (Nov 2), so taking that job off
@@ -10869,6 +10989,9 @@ function openDrainHistory(c){
         <input id="pdhPrice" inputmode="decimal" placeholder="0.00" autocomplete="off" style="padding-left:24px;">
       </div>
       <p id="pdhPriceHint" style="font-size:11.5px;color:var(--muted);margin:0 0 14px;">Just for this customer.</p>
+      <label for="pdhNotes" style="font-size:12.5px;font-weight:600;">Customer notes</label>
+      <textarea id="pdhNotes" rows="3" placeholder="Important things to know for the drain and the clean and refill..." style="min-height:74px;margin:4px 0 4px;"></textarea>
+      <p style="font-size:11.5px;color:var(--muted);margin:0 0 14px;">Shown on the pool drain and the clean and refill in the app.</p>
       <div style="font-size:12.5px;font-weight:600;margin-bottom:4px;">Drains</div>
       <div id="pdhList" style="border:1px solid var(--line);border-radius:10px;padding:2px 10px;margin-bottom:12px;max-height:36vh;overflow-y:auto;"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
@@ -10898,7 +11021,8 @@ function openDrainHistory(c){
   selfBox.addEventListener('change', ()=>{
     if(selfBox.checked) c.drainsSelf = true; else delete c.drainsSelf;
     saveCustomers();
-    showToast(selfBox.checked ? displayName(c.name) + ' performs their own drains' : displayName(c.name) + ' is back on your drain lists');
+    const did = pdApplyDrainSettings([c.id]);
+    showToast((selfBox.checked ? displayName(c.name) + ' performs their own drains' : displayName(c.name) + ' is back on your drain lists') + (did ? ' \u2014 ' + did : ''));
   });
   // Overnight drain (Nov 1): drained one day, cleaned and refilled the next
   const ovBox = overlay.querySelector('#pdhOvernight');
@@ -10917,13 +11041,14 @@ function openDrainHistory(c){
     c.drainOvernight = !!ovBox.checked;
     saveCustomers();
     drawClean();
-    showToast(displayName(c.name) + (ovBox.checked ? ': overnight drain' : ': drained in one day'));
+    const did = pdApplyDrainSettings([c.id]);
+    showToast(displayName(c.name) + (ovBox.checked ? ': overnight drain' : ': drained in one day') + (did ? ' \u2014 ' + did : ''));
   });
   // Cleaning day (Nov 1): next day, 2nd, 3rd, 4th or a custom number of days after the drain
   cleanSel.addEventListener('change', async ()=>{
     let k = Number(cleanSel.value);
     if(cleanSel.value === 'custom') k = await pdAskCleanDays(pdCleanDays(c));
-    if(k){ c.drainCleanDays = k; saveCustomers(); showToast(displayName(c.name) + ': cleaning ' + pdDayWord(k).toLowerCase()); }
+    if(k){ c.drainCleanDays = k; saveCustomers(); const did = pdApplyDrainSettings([c.id]); showToast(displayName(c.name) + ': cleaning ' + pdDayWord(k).toLowerCase() + (did ? ' \u2014 ' + did : '')); }
     drawClean();
   });
   const every = overlay.querySelector('#pdhEvery');
@@ -10978,6 +11103,19 @@ function openDrainHistory(c){
   }
   fillPrice();
   priceIn.addEventListener('change', savePrice);
+  // Customer notes: saved as they are typed, shown on the drain and the clean & refill in the app
+  const notesIn = overlay.querySelector('#pdhNotes');
+  notesIn.value = c.drainNotes || '';
+  let notesTimer = null;
+  const saveNotes = ()=>{
+    clearTimeout(notesTimer);
+    const v = notesIn.value.trim();
+    if((c.drainNotes || '') === v) return;
+    if(v) c.drainNotes = v; else delete c.drainNotes;
+    saveCustomers();
+  };
+  notesIn.addEventListener('input', ()=>{ clearTimeout(notesTimer); notesTimer = setTimeout(saveNotes, 500); });
+  notesIn.addEventListener('blur', saveNotes);
   const listEl = overlay.querySelector('#pdhList');
   const nextEl = overlay.querySelector('#pdhNext');
   const dateIn = overlay.querySelector('#pdhDate');
@@ -11025,6 +11163,7 @@ function openDrainHistory(c){
   });
   overlay.querySelector('#pdhDone').addEventListener('click', ()=>{
     savePrice();
+    saveNotes();
     // A date left in the box is a drain too (Oct 10)
     if(dateIn.value){
       pdRecord([c.id], dateIn.value, undefined, body);
@@ -11647,7 +11786,7 @@ function pdOpenExtraWork(e, name, onDone){
   box.className = 'confirm-box';
   box.style.cssText = 'max-width:440px;text-align:left;';
   box.innerHTML = '<h3 style="font-size:16px;margin:0 0 4px;"></h3>'
-    + '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Each item shows on the drain job in the app with a box to tick, like a work order\u2019s items.</p>'
+    + '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Each item shows on the job in the app with a box to tick, like a work order\u2019s items.</p>'
     + '<div data-list></div>'
     + '<div style="display:flex;gap:8px;margin-top:12px;"><input type="text" data-new placeholder="Search Products & Services or type a new item\u2026" style="flex:1;" autocomplete="off">'
     + '<button type="button" class="btn btn-ghost" data-add style="width:auto;flex:0 0 auto;padding:6px 12px;font-size:12.5px;">Add</button></div>'
@@ -11954,6 +12093,7 @@ function pdOpenDayPicker(iso, currentIds, onSave){
       <p class="pdp-hint" style="font-size:11.5px;color:var(--muted);margin:0 0 12px;"></p>
       <input class="pdp-search" placeholder="Search by name, address, phone, or email" autocomplete="off" style="margin-bottom:10px;">
       <div class="pdp-list" style="flex:1;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px;margin-bottom:14px;"></div>
+      <div class="field" id="pdpRpHost" style="display:none;margin:-4px 0 14px;"></div>
       <div class="btn-row">
         <button class="btn btn-primary pdp-done" style="flex:1;">Done</button>
         <button class="btn btn-ghost pdp-cancel" style="width:auto;">Cancel</button>
@@ -11965,6 +12105,14 @@ function pdOpenDayPicker(iso, currentIds, onSave){
   const listEl = overlay.querySelector('.pdp-list');
   const search = overlay.querySelector('.pdp-search');
   const countEl = overlay.querySelector('.pdp-count');
+  // Where in the route (Nov 2): for one customer newly ticked; with more than
+  // one, each goes under its own customer
+  const newOnes = ()=> Array.from(picked).filter(id => (currentIds || []).indexOf(id) === -1);
+  const rp = makeRoutePlace({host: 'pdpRpHost', active: ()=> true, date: ()=> iso,
+    techIds: ()=> Array.from(new Set(newOnes().map(id => String((customers.find(x => x && x.id === id) || {}).technicianId || '')).filter(Boolean))),
+    customerIds: newOnes,
+    label: ()=> 'Pool drain' + (newOnes().length === 1 ? ' \u00b7 ' + displayName((customers.find(x => x && x.id === newOnes()[0]) || {}).name || '') : ''),
+    stopsFor: (t, d)=> twRouteFor(t, d).list, techName: id => twTechName(id), nameOf: c => displayName(c.name || '')});
   const drawCount = ()=>{ const n = picked.size; countEl.textContent = n + (n === 1 ? ' customer' : ' customers'); };
   const hay = c => [c.name, c.address, c.phone, c.email].filter(Boolean).join(' ').toLowerCase();
   const bodyName = (c, key) => ((pdBodies(c).find(b => b.key === key) || {}).label) || 'Pool';
@@ -11998,7 +12146,7 @@ function pdOpenDayPicker(iso, currentIds, onSave){
         const cb = document.createElement('input');
         cb.type = 'checkbox'; cb.style.width = 'auto';
         cb.checked = picked.has(c.id);
-        cb.addEventListener('change', ()=>{ if(cb.checked) picked.add(c.id); else picked.delete(c.id); drawCount(); });
+        cb.addEventListener('change', ()=>{ if(cb.checked) picked.add(c.id); else picked.delete(c.id); drawCount(); rp.refresh(); });
         lbl.appendChild(cb);
         const txt = document.createElement('span');
         txt.style.cssText = 'min-width:0;flex:1;';
@@ -12021,6 +12169,12 @@ function pdOpenDayPicker(iso, currentIds, onSave){
       });
     });
     if(t && !any) listEl.innerHTML = '<div style="padding:12px 4px;font-size:12.5px;color:var(--muted);">No customers match that search.</div>';
+    const addR = jobNameOnlyRow(search.value, name=>{
+      const c = addNameOnlyCustomer(name);
+      active.push(c); byBucket.never.push(c); byBucket.never.sort(byName);
+      picked.add(c.id); search.value = ''; draw(); drawCount(); rp.refresh();
+    }, 'padding:10px 6px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px;');
+    if(addR) listEl.insertBefore(addR, listEl.firstChild);
     listEl.scrollTop = keepScroll;
   }
   search.addEventListener('input', draw);
@@ -12030,7 +12184,7 @@ function pdOpenDayPicker(iso, currentIds, onSave){
   search.addEventListener('touchstart', emptyForFresh, {passive: true});
   setTimeout(()=>{ try{ search.focus(); }catch(e){} }, 60);
   draw(); drawCount();
-  overlay.querySelector('.pdp-done').addEventListener('click', ()=>{ overlay.remove(); onSave(Array.from(picked)); });
+  overlay.querySelector('.pdp-done').addEventListener('click', ()=>{ const place = rp.value(); overlay.remove(); onSave(Array.from(picked), place); });
   overlay.querySelector('.pdp-cancel').addEventListener('click', ()=> overlay.remove());
 }
 
@@ -12183,6 +12337,7 @@ function calTechMenu(value, onChange){
 const WCAL_TAGS = {
   fc: ['FC', 'Filter cleans', '#FBF1DD', '#8A5E0B'],
   pd: ['PD', 'Pool drains', '#C3DEF3', '#174C78'],
+  cr: ['CR', 'Clean & refill', '#8EC5F5', '#0D3A66'],   // right under the drains (Nov 3)
   wo: ['WO', 'Work orders', '#E9EEF0', '#3E5560'],
   tk: ['TK', 'Tasks', '#C9EBC3', '#24601F']
 };
@@ -12488,12 +12643,10 @@ function openWorkCalendar(startDay, stayHere){
     // and drains on the days picked go to the app
     const right = document.createElement('div');
     right.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:flex-end;flex:1 0 100%;flex-wrap:wrap;';
-    if(!selecting){
-      const selBtn = smallBtn('Select for route', 'btn-primary');
-      selBtn.title = 'Pick days to send to the app';
-      selBtn.addEventListener('click', ()=>{ selecting = true; picked.clear(); draw(); });
-      right.appendChild(selBtn);
-    } else {
+    // No Select for route button any more (Nov 3): jobs go to the app when
+    // they're put on a day, so this mode can't be started
+    selecting = false;
+    if(selecting){
       const hint = document.createElement('span');
       hint.style.cssText = 'font-size:12.5px;font-weight:600;color:var(--ink);';
       hint.textContent = 'Tap the days to send';
@@ -12555,7 +12708,7 @@ function openWorkCalendar(startDay, stayHere){
       // Select all, and Cancel at the far right; the hint stays first
       [push, off, selAll, cancel].forEach(el => right.appendChild(el));
     }
-    head.appendChild(right);
+    // (the row below the heading is gone with the button, so the calendar sits higher)
     calHeadToPageStyle(head);
     box.appendChild(head);
     if(monthPick){
@@ -12698,7 +12851,7 @@ function openWorkCalendar(startDay, stayHere){
     gridBtn('+ Filter clean group', 'btn-ghost', ()=> fcPickGroupForDay(sel, after));
     gridBtn('+ Pool drain', 'btn-ghost', ()=>{
       // Grouped like the Drains page: overdue, due soon, never...
-      pdOpenDayPicker(sel, on.pd.map(e => e.customerId), (ids)=>{
+      pdOpenDayPicker(sel, on.pd.map(e => e.customerId), (ids, place)=>{
         let all = pdCal();
         const want = new Set(ids);
         all.filter(e => e.date === sel && !want.has(e.customerId)).forEach(pdCalUnpush);
@@ -12710,10 +12863,13 @@ function openWorkCalendar(startDay, stayHere){
             // Every body of water they have, listed on the one row
             const kinds = pdKindsFor(customers.find(x => x.id === cid));
             const ent = {id: 'dc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), date: sel, customerId: cid, bodyKind: kinds[0], bodyKinds: kinds.slice()};
+            if(typeof place === 'string') ent.placeAfter = place;   // where in the route (Nov 2)
             all.push(ent); added.push(ent);
           }
         });
         pdCalSave(all);
+        // Straight to the app (Nov 2): each new drain goes onto its technician's route
+        added.forEach(e => setDrainStatus(e.id, 'app', true));
         setTimeout(()=> pdAfterScheduled(added), 0);
         renderPoolDrains();
         draw();
@@ -12734,7 +12890,7 @@ function openWorkCalendar(startDay, stayHere){
     }
     // Every section on the same columns, so they line up down the window
     // The last column holds Move and the bin (Nov 1)
-    const COLS = 'display:grid;grid-template-columns:22px 170px minmax(150px,1fr) 110px 140px 58px;gap:10px;align-items:center;min-width:730px;';
+    const COLS = 'display:grid;grid-template-columns:22px 170px minmax(150px,1fr) 110px 140px 196px;gap:10px;align-items:center;min-width:868px;';
     const listWrap = document.createElement('div');
     listWrap.style.cssText = 'overflow-x:auto;';
     panel.appendChild(listWrap);
@@ -12797,6 +12953,20 @@ function openWorkCalendar(startDay, stayHere){
       els.forEach(el => { el.style.justifySelf = ''; w.appendChild(el); });
       return w;
     };
+    // Which technician gets a work order or task: its own menu (Nov 3)
+    const techMenu = (curId, onPick, locked)=>{
+      // A finished job shows no technician menu (Nov 3)
+      if(locked) return document.createElement('span');
+      const m = document.createElement('select');
+      m.style.cssText = 'width:100%;padding:4px 8px;font-size:12px;';
+      m.title = 'Which technician gets this in the app';
+      if(!curId){ const o = document.createElement('option'); o.value = ''; o.textContent = 'No technician'; m.appendChild(o); }
+      sortedTechs().forEach(t => { const o = document.createElement('option'); o.value = String(t.id); o.textContent = t.name; m.appendChild(o); });
+      m.value = String(curId || '');
+      m.disabled = !!locked;
+      m.addEventListener('change', ()=>{ if(m.value) onPick(m.value); });
+      return m;
+    };
     const extraBtn = (has, fn)=>{
       const addX = document.createElement('button');
       addX.type = 'button';
@@ -12805,10 +12975,18 @@ function openWorkCalendar(startDay, stayHere){
       addX.addEventListener('click', fn);
       return addX;
     };
+    // The button sits in the row, right of the technician menu (Nov 3), before
+    // Move and the bin; the items added show under the item column
+    const placeExtraBtn = (row, has, fn)=>{
+      const b = extraBtn(has, fn);
+      const acts = row.lastElementChild;
+      if(acts && acts.tagName === 'SPAN' && acts.style.justifyContent === 'flex-end') acts.insertBefore(b, acts.firstChild);
+      else { const w = actCell(b); row.appendChild(w); }
+    };
     const extraLine = ()=>{
       const extra = document.createElement('div');
       // One line: tags that run past the end tuck away behind the button
-      extra.style.cssText = 'grid-column:2 / 6;display:flex;gap:6px;flex-wrap:nowrap;align-items:center;padding:0 0 2px;min-width:0;';
+      extra.style.cssText = 'grid-column:3 / 4;display:flex;gap:6px;flex-wrap:nowrap;align-items:center;padding:0 0 2px;min-width:0;';
       const tagsWrap = document.createElement('div');
       tagsWrap.style.cssText = 'display:flex;gap:6px;flex-wrap:nowrap;align-items:center;flex:0 1 auto;min-width:0;overflow:hidden;';
       tagsWrap.className = 'pd-extra-tags';
@@ -12900,7 +13078,7 @@ function openWorkCalendar(startDay, stayHere){
             // The group's own technician is the default, not a choice to keep
             if(techSel.value && String(techSel.value) !== String(it.technicianId || '')) it.custTech[cid] = techSel.value; else delete it.custTech[cid];
           }));
-          row.appendChild(techSel);
+          row.appendChild(isDone ? document.createElement('span') : techSel);   // none once finished (Nov 3)
           // A bin at the far right: out of the group for this day and off the
           // app. A done one too (Oct 19): it leaves the calendar, and the clean
           // stays in their history.
@@ -12948,12 +13126,12 @@ function openWorkCalendar(startDay, stayHere){
               if(items.length) it.custExtra[cid] = items; else delete it.custExtra[cid];
             })));
           });
-          if(!isDone) extra.appendChild(extraBtn(exItems.length, ()=>{
+          if(!isDone) placeExtraBtn(row, exItems.length, ()=>{
             pdOpenExtraWork({extraWork: exItems}, displayName(c.name), items=> editGroup(g.id, it=>{
               it.custExtra = it.custExtra || {};
               if(items.length) it.custExtra[cid] = items; else delete it.custExtra[cid];
             }));
-          }));
+          });
           if(!tagsWrap.children.length) tagsWrap.remove();
           if(extra.children.length) row.appendChild(extra);
           listEl.appendChild(row);
@@ -12991,7 +13169,7 @@ function openWorkCalendar(startDay, stayHere){
           if(ids.size && to){ const recs = pdScheduled(); recs.forEach(rr => { if(ids.has(rr.id)) rr.technicianId = to; }); lsSet('scheduledPoolDrains', recs); }
           draw();
         });
-        row.appendChild(techSel);
+        row.appendChild(st === 'done' ? document.createElement('span') : techSel);   // none once finished (Nov 3)
         {
           const bin = binBtn('Take off this day', ()=>{
             pdCalUnpush(e);
@@ -13035,12 +13213,16 @@ function openWorkCalendar(startDay, stayHere){
         exItems.forEach((li, idx)=>{
           tagsWrap.appendChild(pdExtraTag(li, isDone ? null : ()=>{ const items = exItems.slice(); items.splice(idx, 1); saveExtra(items); }));
         });
-        if(!isDone) extra.appendChild(extraBtn(exItems.length, ()=> pdOpenExtraWork(e, displayName(c.name), saveExtra)));
+        if(!isDone) placeExtraBtn(row, exItems.length, ()=> pdOpenExtraWork(e, displayName(c.name), saveExtra));
         if(!tagsWrap.children.length) tagsWrap.remove();
         if(extra.children.length) row.appendChild(extra);
         listWrap.appendChild(row);
       });
     }
+
+    // ----- Clean & refill: right under the pool drains (Nov 3), as the same
+    // kind of job; the rows are the task rows below
+    renderTaskRows(on.tk.filter(calIsRefill), 'cr');
 
     // ----- Work orders: one row a visit
     if(on.wo.length){
@@ -13055,7 +13237,15 @@ function openWorkCalendar(startDay, stayHere){
         const what = (j.title || (j.lineItems || []).map(li => li.description).join(', ') || 'Work order');
         row.appendChild(textCell((j.workOrderNumber ? '#' + quoteNumberText(j.workOrderNumber) + ' · ' : '') + what));
         row.appendChild(calStatusBadge(j.status === 'done' ? 'done' : j.held ? '' : 'app', want => setJobStatus(j.id, want)));
-        row.appendChild(textCell(techName(j.technicianId)));
+        row.appendChild(techMenu(j.technicianId, id=>{
+          const list = woJobs(); const it = list.find(x => x && x.id === j.id); if(!it) return;
+          it.technicianId = id;
+          delete it.placeAfter;   // a spot on the old technician's route no longer means anything
+          lsSet('scheduledWorkOrders', list);
+          try{ renderWorkOrderHistory(); }catch(e){}
+          draw();
+          showToast('Work order for ' + displayName(c.name) + ' now goes to ' + techName(id));
+        }, j.status === 'done'));
         // A bin (Oct 19): this visit off the app and off the day
         const woBin = binBtn('Take off this day', async ()=>{
           const ok = await confirmDialog(j.status === 'done'
@@ -13081,15 +13271,35 @@ function openWorkCalendar(startDay, stayHere){
             return true;
           }
         }), woBin));
+        // Extra work (Nov 3), in the same place as on drains and filter cleans:
+        // it shows in the app on the job, each with a box to tick
+        {
+          const isDone = j.status === 'done';
+          const saveWoExtra = items=>{
+            const list = woJobs(); const it = list.find(x => x && x.id === j.id); if(!it) return;
+            if(items.length) it.extraWork = items; else delete it.extraWork;
+            lsSet('scheduledWorkOrders', list);
+            try{ renderWorkOrderHistory(); }catch(e){}
+            draw();
+          };
+          const [extra, tagsWrap] = extraLine();
+          const exItems = pdExtraOf(j);
+          exItems.forEach((li, idx)=>{ tagsWrap.appendChild(pdExtraTag(li, isDone ? null : ()=>{ const items = exItems.slice(); items.splice(idx, 1); saveWoExtra(items); })); });
+          if(!isDone) placeExtraBtn(row, exItems.length, ()=> pdOpenExtraWork(j, displayName(c.name), saveWoExtra));
+          if(!tagsWrap.children.length) tagsWrap.remove();
+          if(extra.children.length) row.appendChild(extra);
+        }
         listWrap.appendChild(row);
       });
     }
 
-    // ----- Tasks
-    if(on.tk.length){
-      badge('tk');
-      colHead(listWrap, 'Task');
-      on.tk.forEach(t=>{
+    // ----- Tasks (Clean & refill is shown above, under the drains)
+    renderTaskRows(on.tk.filter(t => !calIsRefill(t)), 'tk');
+    function renderTaskRows(list, tag){
+    if(list.length){
+      badge(tag);
+      colHead(listWrap, tag === 'cr' ? 'Clean & refill' : 'Task');
+      list.forEach(t=>{
         const cs = taskCusts(t);
         const row = document.createElement('div');
         row.style.cssText = COLS + 'padding:6px 0;border-top:1px solid var(--line);font-size:13px;';
@@ -13098,7 +13308,15 @@ function openWorkCalendar(startDay, stayHere){
         else row.appendChild(textCell('No customer', true));
         row.appendChild(textCell(t.title || 'Task'));
         row.appendChild(calStatusBadge(t.done ? 'done' : t.held ? '' : 'app', want => setTaskStatus(t.id, want)));
-        row.appendChild(textCell(techName(t.technicianId)));
+        row.appendChild(techMenu(t.technicianId, id=>{
+          const it = tasks.find(x => x && x.id === t.id); if(!it) return;
+          it.technicianId = id;
+          delete it.placeAfter;
+          saveTasks();
+          try{ renderTaskList(); }catch(e){}
+          draw();
+          showToast('"' + (t.title || 'Task') + '" now goes to ' + techName(id));
+        }, t.done));
         // A bin (Oct 19): this task off the app and off the day
         const tkBin = binBtn('Take off this day', async ()=>{
           const ok = await confirmDialog(t.done
@@ -13125,8 +13343,25 @@ function openWorkCalendar(startDay, stayHere){
             return true;
           }
         }), tkBin));
+        // Extra work (Nov 3): same place as the drains, a Clean & refill too
+        {
+          const saveTkExtra = items=>{
+            const it = tasks.find(x => x && x.id === t.id); if(!it) return;
+            if(items.length) it.extraWork = items; else delete it.extraWork;
+            saveTasks();
+            try{ renderTaskList(); }catch(e){}
+            draw();
+          };
+          const [extra, tagsWrap] = extraLine();
+          const exItems = pdExtraOf(t);
+          exItems.forEach((li, idx)=>{ tagsWrap.appendChild(pdExtraTag(li, t.done ? null : ()=>{ const items = exItems.slice(); items.splice(idx, 1); saveTkExtra(items); })); });
+          if(!t.done) placeExtraBtn(row, exItems.length, ()=> pdOpenExtraWork(t, cs.length ? cs.map(c => displayName(c.name)).join(', ') : (t.title || 'Task'), saveTkExtra));
+          if(!tagsWrap.children.length) tagsWrap.remove();
+          if(extra.children.length) row.appendChild(extra);
+        }
         listWrap.appendChild(row);
       });
+    }
     }
     document.body.appendChild(dayWin);
     setTimeout(()=>{ panel.querySelectorAll('.pd-scroll-name').forEach(webMarqueeIfCut); pdFadeExtraTags(panel); }, 0);
@@ -13177,7 +13412,7 @@ function openWorkCalendar(startDay, stayHere){
   }
   // One customer's drain to another status: not sent (off the app), in the app
   // (sent to their technician, or back to not done), or done
-  function setDrainStatus(entryId, want){
+  function setDrainStatus(entryId, want, quiet){
     const all = pdCal();
     const e = all.find(x => x.id === entryId); if(!e) return;
     const c = custOf(e.customerId); if(!c) return;
@@ -13210,6 +13445,7 @@ function openWorkCalendar(startDay, stayHere){
         r.date = e.date; r.technicianId = tech; r.bodyKind = pdBodyCategory(c, k); r.bodyKey = k; r.bodyName = pdBodyLabel(c, k); r.order = Math.max(0, order);
         r.photoRequired = pdCustPhoto(c) && e.photoRequired !== false;   // the customer's Drains settings (Oct 19)
         r.emailCustomer = pdCustEmail(c);
+        if(typeof e.placeAfter === 'string') r.placeAfter = e.placeAfter; else delete r.placeAfter;   // where in the route (Nov 2)
         if(want === 'done'){
           if(r.status !== 'done'){ r.status = 'done'; r.doneAt = new Date().toISOString(); r.doneBy = 'office'; }
         } else if(r.status === 'done'){
@@ -13221,6 +13457,7 @@ function openWorkCalendar(startDay, stayHere){
     lsSet('scheduledPoolDrains', recs);
     pdCalSave(all);
     renderPoolDrains();
+    if(quiet) return;
     draw();
     showToast(displayName(c.name) + ': ' + (want === 'done' ? 'done' : want === 'app' ? 'in the app' : 'not in app'));
   }
@@ -13310,6 +13547,7 @@ function openWorkCalendar(startDay, stayHere){
           r.date = day; r.technicianId = tech; r.bodyKind = pdBodyCategory(c, k); r.bodyKey = k; r.bodyName = pdBodyLabel(c, k); r.order = i;
           r.photoRequired = pdCustPhoto(c) && e.photoRequired !== false;   // the customer's Drains settings (Oct 19)
           r.emailCustomer = pdCustEmail(c);
+          if(typeof e.placeAfter === 'string') r.placeAfter = e.placeAfter; else delete r.placeAfter;   // where in the route (Nov 2)
           drains++;
         });
         // Extra work on the first of them still to do
@@ -18033,7 +18271,7 @@ function scheduleFilterGroup(g){
   // Re-scheduling replaces this group's previous entries rather than stacking
   sched = sched.filter(s => s.groupId !== g.id || s.status === 'done');
   fgLiveIds(g).forEach((cid, i)=>{
-    sched.push({
+    const nsc = {
       id: 'fc_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
       groupId: g.id,
       groupName: g.name,
@@ -18044,7 +18282,9 @@ function scheduleFilterGroup(g){
       photoRequired: g.photoRequired !== false,   // the group's Photo required (Oct 3)
       emailCustomer: g.emailCustomer !== false,   // the group's Email customer (Oct 11)
       status: 'scheduled'
-    });
+    };
+    if(fgCustPlace(g, cid) !== undefined) nsc.placeAfter = fgCustPlace(g, cid);   // where in the route (Nov 2)
+    sched.push(nsc);
   });
   lsSet('scheduledFilterCleans', sched);
   g.finalized = true;
@@ -18428,8 +18668,17 @@ function fcPickGroupForDay(iso, after){
     let moved = false;
     sched.forEach(sc=>{ if(sc && chosen.some(g => g.id === sc.groupId) && sc.status !== 'done' && sc.date !== iso){ sc.date = iso; moved = true; } });
     if(moved) lsSet('scheduledFilterCleans', sched);
+    // Straight to the app (Nov 2): a group not sent yet goes with its technician
+    let blocked = 0;
+    chosen.forEach(g=>{
+      if(g.finalized) return;
+      if(filterGroupBlockers(g).length){ blocked++; return; }
+      g.custHold = {};
+      scheduleFilterGroup(g);
+    });
     if(after) after();
-    showToast(chosen.length === 1 ? (chosen[0].name || 'Group') + ' put on ' + nice : chosen.length + ' groups put on ' + nice);
+    showToast((chosen.length === 1 ? (chosen[0].name || 'Group') + ' put on ' + nice : chosen.length + ' groups put on ' + nice)
+      + (blocked ? ' \u2014 ' + blocked + (blocked === 1 ? ' needs' : ' need') + ' a technician before ' + (blocked === 1 ? 'it goes' : 'they go') + ' to the app' : ''));
   });
 }
 document.getElementById('filterGroupTech').addEventListener('change', ()=>{ filterGroupPage = 1; renderFilterGroups(); });
@@ -21192,6 +21441,23 @@ function renderWcSuggest(term){
 // that name, so the job shows it on Today, the calendar and the app like
 // anyone else's. No service day and no pool, so they're never on a service
 // route or a drain list; the details can be filled in later.
+// "+ Use <name>" row for a customer search (Nov 5): someone not on the list,
+// by name, for a job. Not shown when that exact name is already a customer.
+function jobNameOnlyRow(typed, onAdd, css){
+  const t = String(typed || '').trim();
+  if(!t || (customers || []).some(c => c && !c.deleted && String(c.name || '').trim().toLowerCase() === t.toLowerCase())) return null;
+  const row = document.createElement('div');
+  row.className = 'press-row';
+  row.dataset.addName = '1';
+  row.style.cssText = css || 'padding:9px 12px;cursor:pointer;border-top:1px solid var(--line);font-size:13px;';
+  row.innerHTML = '<div style="font-weight:600;"></div><div style="font-size:11.5px;color:var(--muted);">Not a customer yet — just the name for now</div>';
+  row.firstChild.textContent = '+ Use “' + t + '”';
+  const go = e=>{ e.preventDefault(); onAdd(t); };
+  row.addEventListener('mousedown', go);
+  row.addEventListener('touchstart', go, {passive: false});
+  return row;
+}
+
 function addNameOnlyCustomer(name){
   const c = {id: 'cust_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: String(name || '').trim(),
              active: true, hasPool: false, hasSpa: false, technicianId: '', nameOnly: true, createdAt: new Date().toISOString()};
@@ -22738,6 +23004,7 @@ function qoBodyInner(item, customerId){
     t.done && t.doneAt ? qoDoneRow('Completed', when(t.doneAt), t.doneBy ? (tech(t.doneBy) || 'a technician') : '', t.doneDurationMs) : '',
     !t.done && tech(t.technicianId) ? 'Technician: ' + tech(t.technicianId) : ''], !t.done, complete);
   if(t.details) qoSection(doc, 'Details', qoNotes(t.details));
+  if(Array.isArray(t.doneExtraWork) && t.doneExtraWork.length) qoSection(doc, 'Extra work done', qoNotes(t.doneExtraWork.join(', ')));
   if(t.doneNotes) qoSection(doc, 'Technician\u2019s notes', qoNotes(t.doneNotes));
   return doc;
 }
@@ -22964,6 +23231,7 @@ function qoItemText(item){
     if((j.lineItems || w.lineItems || []).length){ lines.push('Line items:'); items(j.lineItems || w.lineItems); }
     if(j.notes || w.notes) lines.push('Work order notes: ' + (j.notes || w.notes));
     if(item.j && item.j.doneAt) lines.push('Submitted ' + fmtDate(item.j.doneAt) + (item.j.doneBy ? ' by ' + (tech(item.j.doneBy) || 'a technician') : ''));
+    if(item.j && Array.isArray(item.j.doneExtraWork) && item.j.doneExtraWork.length) lines.push('Extra work done: ' + item.j.doneExtraWork.join(', '));
     if(item.j && item.j.doneNotes) lines.push('Technician\u2019s notes: ' + item.j.doneNotes);
   } else if(item.kind === 'drain'){
     const f = item.f;
@@ -22985,6 +23253,7 @@ function qoItemText(item){
     if(t.date) lines.push('Scheduled for ' + fmtDate(t.date + 'T12:00:00'));
     if(t.details) lines.push('Details: ' + t.details);
     if(t.done && t.doneAt) lines.push('Completed ' + fmtDate(t.doneAt) + (t.doneBy ? ' by ' + (tech(t.doneBy) || 'a technician') : ''));
+    if(Array.isArray(t.doneExtraWork) && t.doneExtraWork.length) lines.push('Extra work done: ' + t.doneExtraWork.join(', '));
     if(t.doneNotes) lines.push('Technician\u2019s notes: ' + t.doneNotes);
   }
   return lines.join('\n');
@@ -25445,6 +25714,8 @@ function photoEveryone(){
 }
 function photoEveryoneOn(step, key){
   const all = photoEveryone();
+  // Skipping a service or job needs a photo and note unless the office turned it off
+  if(step === 'skipjob') return !(all.skipjob && all.skipjob.skipjob === false);
   return !!(all[step] && all[step][key] === true);
 }
 // After photo starts on for everyone — Optional, and required at the pool
@@ -25476,7 +25747,8 @@ function seedAfterPhotoDefaults(state){
 function setPhotoEveryone(step, key, on){
   const all = photoEveryone();
   all[step] = all[step] || {};
-  if(on) all[step][key] = true; else delete all[step][key];
+  if(step === 'skipjob') all[step][key] = !!on;      // on by default, so "off" is written down
+  else if(on) all[step][key] = true; else delete all[step][key];
   lsSet('photoEveryone', all);
 }
 
@@ -25622,7 +25894,7 @@ function photoTechnicianList(step, bodies){
     return box;
   }
   // The gate and the skip rule are one each per person; the rest are per body
-  const single = step === 'gate' || step === 'skip' || step === 'video' || step === 'saltcell';
+  const single = step === 'gate' || step === 'skip' || step === 'skipjob' || step === 'video' || step === 'saltcell';
   const columns = single
     ? [[step, '']]
     : PHOTO_BODIES.filter(([key]) => bodies[key]);
@@ -25630,7 +25902,7 @@ function photoTechnicianList(step, bodies){
   // is only ever optional, so its tick is all there is
   // After photo is always shown now, so it has no Optional button (Oct 3)
   // Skip has Optional too (Oct 3): the photo-and-note window, nothing in it needed
-  const offersOptional = step !== 'video' && step !== 'after' && step !== 'saltcell';   // it's the button or nothing
+  const offersOptional = step !== 'video' && step !== 'after' && step !== 'saltcell' && step !== 'skipjob';   // it's the button or nothing
 
   // Always the technician as they are in the list right now. A sync replaces
   // the whole list with fresh objects, so the one captured when this was drawn
@@ -25643,6 +25915,7 @@ function photoTechnicianList(step, bodies){
     return step === 'gate' ? cur.requireGatePhoto === true
       : step === 'saltcell' ? cur.requireSaltCellPhoto === true
       : step === 'skip' ? cur.requireSkipProof === true
+      : step === 'skipjob' ? cur.requireSkipJobProof === true
       : step === 'video' ? cur.allowVideo === true
       : photoRuleFor(cur, step, key) === true;
   };
@@ -25651,6 +25924,7 @@ function photoTechnicianList(step, bodies){
     if(step === 'gate') cur.requireGatePhoto = on;
     else if(step === 'saltcell') cur.requireSaltCellPhoto = on;
     else if(step === 'skip') cur.requireSkipProof = on;
+    else if(step === 'skipjob') cur.requireSkipJobProof = on;
     else if(step === 'video') cur.allowVideo = on;
     else setPhotoRule(cur, step, key, on);
   };
@@ -25816,6 +26090,7 @@ function photoRowCountText(step, bodies){
     step === 'gate' ? (t.requireGatePhoto === true || photoEveryoneOn('gate', 'gate'))
     : step === 'saltcell' ? (t.requireSaltCellPhoto === true || photoEveryoneOn('saltcell', 'saltcell'))
     : step === 'skip' ? (t.requireSkipProof === true || photoEveryoneOn('skip', 'skip'))
+    : step === 'skipjob' ? (t.requireSkipJobProof === true || photoEveryoneOn('skipjob', 'skipjob'))
     : PHOTO_BODIES.some(([k]) => bodies[k] && (photoRuleFor(t, step, k) || photoEveryoneOn(step, k)))
   );
   const optional = technicians.filter(t => must.indexOf(t) === -1
@@ -25865,6 +26140,10 @@ function renderPhotoRequirements(){
      bodies: {}, oneTick: true},
     // Not a photo step of its own: what a technician must do before skipping
     {step: 'skip', label: 'Skip body of water photo and note', off: false,
+     why: '', bodies: {}, oneTick: true},
+    // Skip service / Skip job on the Today list. On for everyone to start with.
+    {step: 'skipjob', label: 'Skip service / job photo and note', off: false,
+     note: 'When Skip service or Skip job is pressed on the Today list, the technician has to take a photo and write a note before it can be skipped.',
      why: '', bodies: {}, oneTick: true}
   ];
   const own = photoTasks().map(task => ({
@@ -26835,10 +27114,10 @@ function extraChargeDialog(message, abbr, color, okLabel){
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
     overlay.innerHTML = `
-      <div class="confirm-box">
+      <div class="confirm-box" style="max-width:420px;">
         <p>${message}</p>
         <input id="promptInput" placeholder="e.g. MA" style="margin-bottom:14px;">
-        <div class="field" style="margin-bottom:18px;"><label>Color</label><div id="extraDots" style="display:flex;gap:10px;"></div></div>
+        <div class="field" style="margin-bottom:18px;"><label>Color</label><div id="extraDots" style="display:flex;gap:10px;justify-content:space-between;"></div></div>
         <div class="btn-row">
           <button class="btn btn-ghost" id="promptCancel">Cancel</button>
           <button class="btn btn-primary" id="promptOk">Add</button>
@@ -26856,7 +27135,7 @@ function extraChargeDialog(message, abbr, color, okLabel){
         const d = document.createElement('button');
         d.type = 'button';
         d.setAttribute('aria-label', 'Color');
-        d.style.cssText = 'width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:3px solid #fff;cursor:pointer;background:' + c + ';'
+        d.style.cssText = 'flex:0 1 34px;width:34px;max-width:34px;aspect-ratio:1/1;height:auto;min-width:0;padding:0;border-radius:50%;border:3px solid #fff;cursor:pointer;background:' + c + ';'
           + 'box-shadow:0 0 0 ' + (c === picked ? '2px var(--teal-deep)' : '1px var(--line)') + ';';
         d.addEventListener('click', ()=>{ picked = c; draw(); input.focus(); });
         dots.appendChild(d);
@@ -28177,11 +28456,11 @@ function twJobsFor(techId, iso){
   });
   (lsGet('scheduledFilterCleans') || []).filter(f => f && f.date === iso && mine(f)).forEach(f=>{
     out.push({key: 'fc:' + f.id, label: '\ud83d\udebf Filter clean', kind: 'filter clean', title: '', customerId: f.customerId,
-      done: f.status === 'done', doneAt: f.doneAt});
+      done: f.status === 'done', doneAt: f.doneAt, placeAfter: f.placeAfter});
   });
   (lsGet('scheduledPoolDrains') || []).filter(f => f && f.date === iso && mine(f)).forEach(f=>{
     out.push({key: 'pd:' + f.id, label: f.bodyName ? f.bodyName + ' drain' : ({spa: 'Spa drain', fountain: 'Fountain drain', extra: 'Extra body drain'}[f.bodyKind] || 'Pool drain'), drainIcon: true, kind: 'pool drain', title: '', customerId: f.customerId,
-      done: f.status === 'done', doneAt: f.doneAt});
+      done: f.status === 'done', doneAt: f.doneAt, placeAfter: f.placeAfter});
   });
   (tasks || []).filter(t => t && t.date === iso && mine(t)).forEach(t=>{
     const ids = (t.customerIds || []).length ? t.customerIds : [''];
@@ -31087,6 +31366,182 @@ function openEquipmentOptionsModal(type, onDone){
   draw();
 }
 
+// ---- Filter sizes (Nov 5) ----
+// The sizes are kept once for the whole company (with the equipment buttons),
+// so every customer with a filter picks from the same list. A customer's own
+// choice is kept on their filter as filterSize.
+// Styles (Nov 5): every kind of equipment has its own list of styles, kept once
+// for the company. The filter's is the list it started with as sizes
+// (__filterSizes, chosen on the filter as filterSize); the rest are kept by type
+// in __styles and chosen on the item as style.
+function styleField(type){ return baseEquipmentType(type) === 'Filter' ? 'filterSize' : 'style'; }
+function styleList(type){
+  const store = lsGet('equipmentChoices') || {};
+  if(baseEquipmentType(type) === 'Filter') return Array.isArray(store.__filterSizes) ? store.__filterSizes.slice() : [];
+  const own = store.__styles && store.__styles[baseEquipmentType(type)];
+  return Array.isArray(own) ? own.slice() : [];
+}
+function saveStyleList(type, list){
+  const store = lsGet('equipmentChoices') || {};
+  if(baseEquipmentType(type) === 'Filter') store.__filterSizes = list;
+  else { store.__styles = Object.assign({}, store.__styles || {}); store.__styles[baseEquipmentType(type)] = list; }
+  lsSet('equipmentChoices', store);
+}
+// Right of a Cartridge, DE or Other filter: a Size button, or the size chosen
+function addStyleControl(container, type, choiceField){
+  const F = styleField(type);
+  const item = currentEquipmentItems.find(i => i.type === type);
+  // Only once a button has been chosen for the row (sand included)
+  if(!(item && item[choiceField])) return;
+  // Held to the width of the chosen button above it, so it sits in the middle of it
+  const slot = document.createElement('div');
+  slot.style.cssText = 'width:140px;flex:0 0 auto;display:flex;justify-content:center;align-self:flex-start;';
+  container.appendChild(slot);
+  container = slot;
+  if(item[F]){
+    const pill = document.createElement('div');
+    pill.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;flex:0 0 auto;'
+      + 'padding:6px 11px;border-radius:9px;background:var(--teal-deep);color:#fff;font-size:14.4px;font-weight:600;'
+      + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:relative;cursor:pointer;';
+    const text = document.createElement('span');
+    text.style.cssText = 'display:block;width:100%;text-align:center;overflow:hidden;white-space:nowrap;transition:opacity .12s ease;';
+    text.textContent = item[F];
+    const x = document.createElement('span');
+    x.textContent = '×';
+    x.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:19px;line-height:1;opacity:0;transition:opacity .12s ease;pointer-events:none;';
+    pill.appendChild(text); pill.appendChild(x);
+    pill.addEventListener('mouseenter', ()=>{ text.style.opacity = '0'; x.style.opacity = '1'; });
+    pill.addEventListener('mouseleave', ()=>{ text.style.opacity = '1'; x.style.opacity = '0'; });
+    pill.title = 'Press again to clear';
+    pill.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      item[F] = '';
+      persistCurrentEquipmentItems();
+      renderEquipmentTypeList();
+    });
+    container.appendChild(pill);
+    // A style longer than the button slides across to show the rest
+    webMarqueeIfCut(text);
+    return;
+  }
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-ghost';
+  btn.style.cssText = 'width:auto;flex:0 0 auto;padding:6px 12px;font-size:13px;';
+  btn.textContent = 'Style';
+  btn.addEventListener('click', (e)=>{ e.stopPropagation(); openStyleWindow(type); });
+  container.appendChild(btn);
+}
+function openStyleWindow(type){
+  const F = styleField(type), baseName = baseEquipmentType(type);
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = '<div class="confirm-box" style="max-width:420px;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 4px;"><h3 style="font-size:15px;margin:0;">' + esc(baseName) + ' styles</h3>'
+    + '<button type="button" id="fsClose" aria-label="Close" title="Close" style="flex:0 0 auto;width:28px;height:28px;padding:0;border-radius:50%;border:1.5px solid var(--line);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;">'
+    + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>'
+    + '<p style="font-size:11.5px;color:var(--muted);margin:0 0 12px;">Add the styles you use for ' + esc(baseName.toLowerCase()) + '. They are kept for every customer with one, so you only add each one once. Press a style to choose it.</p>'
+    + '<div style="display:flex;gap:8px;margin-bottom:14px;"><input id="fsNew" placeholder="' + (baseName === 'Filter' ? 'e.g. 100 sq ft' : 'Add a style') + '" maxlength="40" autocomplete="off" style="flex:1;min-width:0;">'
+    + '<button type="button" class="btn btn-primary" id="fsAdd" style="width:auto;padding:0 16px;">Add</button></div>'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;"><span id="fsArrangeNote" style="font-size:11.5px;color:var(--muted);"></span>'
+    + '<button type="button" class="btn btn-ghost" id="fsArrange" style="width:auto;flex:0 0 auto;padding:5px 12px;font-size:12.5px;">Arrange order</button></div>'
+    + '<div id="fsGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;min-height:44px;max-height:50vh;overflow-y:auto;padding:3px;margin:-3px;"></div></div>';
+  document.body.appendChild(overlay);
+  let arranging = false;
+  const grid = overlay.querySelector('#fsGrid'), input = overlay.querySelector('#fsNew');
+  const shut = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) shut(); });
+  const current = ()=>{ const it = currentEquipmentItems.find(i => i.type === type); return it ? it[F] || '' : ''; };
+  function draw(){
+    const list = styleList(type), mine = current();
+    grid.innerHTML = '';
+    const arrBtn = overlay.querySelector('#fsArrange');
+    arrBtn.style.display = list.length > 1 ? '' : 'none';
+    if(list.length < 2) arranging = false;
+    arrBtn.textContent = arranging ? 'Done' : 'Arrange order';
+    arrBtn.className = 'btn ' + (arranging ? 'btn-primary' : 'btn-ghost');
+    overlay.querySelector('#fsArrangeNote').textContent = arranging ? 'Drag a size to where you want it.' : '';
+    if(!list.length){
+      const none = document.createElement('div');
+      none.style.cssText = 'grid-column:1/-1;font-size:12.5px;color:var(--muted);padding:6px 0;';
+      none.textContent = 'No styles yet. Type one above and press Add.';
+      grid.appendChild(none);
+      return;
+    }
+    list.forEach(size=>{
+      const b = document.createElement('div');
+      b.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 6px;border-radius:9px;background:var(--teal-deep);'
+        + 'color:#fff;font-size:14.4px;font-weight:600;white-space:normal;text-align:center;line-height:1.2;cursor:pointer;min-width:0;'
+        + (size === mine ? 'box-shadow:0 0 0 2px #fff,0 0 0 4px var(--teal-mid);' : '');
+      const t = document.createElement('span');
+      t.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
+      t.textContent = (size === mine ? '✓ ' : '') + size;
+      const x = document.createElement('span');
+      x.textContent = '×';
+      x.title = 'Delete this style';
+      x.style.cssText = 'opacity:.75;font-size:17px;line-height:1;flex:0 0 auto;padding:0 2px;';
+      b.appendChild(t); b.appendChild(x);
+      // Arranging: drag to reorder; pressing does nothing else
+      if(arranging){
+        x.style.display = 'none';
+        b.dataset.reorderKey = size;
+        b.style.cursor = 'grab';
+        b.style.touchAction = 'none';
+        b.style.userSelect = 'none';
+        b.style.boxShadow = '0 0 0 1.5px var(--teal-mid)';
+        t.textContent = size;
+        grid.appendChild(b);
+        attachTouchReorder(b, b, grid, ':scope > [data-reorder-key]', keys=>{
+          const known = new Set(styleList(type));
+          const next = keys.filter(k => known.has(k));
+          styleList(type).forEach(k => { if(next.indexOf(k) === -1) next.push(k); });
+          saveStyleList(type, next);
+        });
+        return;
+      }
+      // Pressing a size chooses it and closes the window
+      b.addEventListener('click', ()=>{
+        const it = ensureEquipmentItem(type);
+        it[F] = size;
+        persistCurrentEquipmentItems();
+        shut();
+        renderEquipmentTypeList();
+      });
+      // The x deletes it, for every customer, after asking
+      x.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const ok = await confirmDialog('Delete the style "' + size + '"? It will be taken off every one of your customers who has it.', 'Delete');
+        if(!ok) return;
+        saveStyleList(type, styleList(type).filter(v => v !== size));
+        let changed = false;
+        customers.forEach(c => (c.equipment || []).forEach(it => { if(it && baseEquipmentType(it.type) === baseName && it[F] === size){ it[F] = ''; changed = true; } }));
+        currentEquipmentItems.forEach(it => { if(it && baseEquipmentType(it.type) === baseName && it[F] === size) it[F] = ''; });
+        if(changed) saveCustomers();
+        draw();
+        renderEquipmentTypeList();
+      });
+      grid.appendChild(b);
+    });
+  }
+  function add(){
+    const v = input.value.trim();
+    if(!v){ input.focus(); return; }
+    const list = styleList(type);
+    if(list.some(x => x.toLowerCase() === v.toLowerCase())){ showToast('That style is already there'); input.select(); return; }
+    list.push(v);
+    saveStyleList(type, list);
+    input.value = '';
+    draw();
+    input.focus();
+  }
+  overlay.querySelector('#fsAdd').addEventListener('click', add);
+  overlay.querySelector('#fsArrange').addEventListener('click', ()=>{ arranging = !arranging; draw(); });
+  overlay.querySelector('#fsClose').addEventListener('click', shut);
+  input.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); add(); } if(e.key === 'Escape') shut(); });
+  draw();
+  setTimeout(()=>{ try{ input.focus(); }catch(e){} }, 50);
+}
+
 function renderChoicePicker(container, type, options, choiceField, customField, onChange){
   container.innerHTML = '';
 
@@ -31643,26 +32098,42 @@ function renderEquipmentTypeList(){
     row.appendChild(label);
 
     const middleArea = document.createElement('div');
-    middleArea.style.flex = '1';
+    // Its width is whatever is left between the name and the fixed columns on
+    // the right; what it holds wraps inside it instead of pushing them along
+    // (a size chosen no longer moves the Type box, Notes or the camera)
+    middleArea.style.flex = '1 1 0';
+    middleArea.style.minWidth = '0';
+    // The choice on top, and the Style button (or the chosen style) underneath it
     middleArea.style.display = 'flex';
-    middleArea.style.justifyContent = 'flex-start';
+    middleArea.style.flexDirection = 'column';
+    middleArea.style.alignItems = 'flex-start';
+    middleArea.style.gap = '6px';
     row.appendChild(middleArea);
+    const pickArea = document.createElement('div');
+    pickArea.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;max-width:100%;';
+    middleArea.appendChild(pickArea);
 
     if(baseEquipmentType(type) === 'Filter'){
-      renderChoicePicker(middleArea, type, ['Cartridge', 'Sand', 'DE', 'Other'], 'filterTypeChoice', 'filterTypeCustom', ()=> renderEquipmentTypeList());
+      renderChoicePicker(pickArea, type, ['Cartridge', 'Sand', 'DE', 'Other'], 'filterTypeChoice', 'filterTypeCustom', ()=> renderEquipmentTypeList());
+      addStyleControl(middleArea, type, 'filterTypeChoice');
     } else if(baseEquipmentType(type) === 'Pump'){
-      renderChoicePicker(middleArea, type, ['Variable Speed', 'Single Speed', 'Other'], 'pumpSpeedChoice', 'pumpSpeedCustom', ()=> renderEquipmentTypeList());
+      renderChoicePicker(pickArea, type, ['Variable Speed', 'Single Speed', 'Other'], 'pumpSpeedChoice', 'pumpSpeedCustom', ()=> renderEquipmentTypeList());
+      addStyleControl(middleArea, type, 'pumpSpeedChoice');
     } else if(baseEquipmentType(type) === 'Cleaning System'){
-      renderChoicePicker(middleArea, type, ['Pop Ups', 'Vacuum', 'Other'], 'cleaningSystemChoice', 'cleaningSystemCustom', ()=> renderEquipmentTypeList());
+      renderChoicePicker(pickArea, type, ['Pop Ups', 'Vacuum', 'Other'], 'cleaningSystemChoice', 'cleaningSystemCustom', ()=> renderEquipmentTypeList());
+      addStyleControl(middleArea, type, 'cleaningSystemChoice');
     } else if(baseEquipmentType(type) === 'Chlorination'){
-      renderChoicePicker(middleArea, type, ['Tabs', 'Salt Cell', 'Liquid', 'Other'], 'chlorinationChoice', 'chlorinationCustom', ()=> renderEquipmentTypeList());
+      renderChoicePicker(pickArea, type, ['Tabs', 'Salt Cell', 'Liquid', 'Other'], 'chlorinationChoice', 'chlorinationCustom', ()=> renderEquipmentTypeList());
+      addStyleControl(middleArea, type, 'chlorinationChoice');
     } else if(baseEquipmentType(type) === 'Heater'){
-      renderChoicePicker(middleArea, type, ['Solar', 'Heat Pump', 'Gas', 'Other'], 'heaterChoice', 'heaterCustom', ()=> renderEquipmentTypeList());
+      renderChoicePicker(pickArea, type, ['Solar', 'Heat Pump', 'Gas', 'Other'], 'heaterChoice', 'heaterCustom', ()=> renderEquipmentTypeList());
+      addStyleControl(middleArea, type, 'heaterChoice');
     } else {
       // An equipment type the user created — its buttons come from the saved
       // list, which renderChoicePicker merges in
-      renderChoicePicker(middleArea, type, ['Other'],
+      renderChoicePicker(pickArea, type, ['Other'],
         'customChoice', 'customChoiceOther', ()=> renderEquipmentTypeList());
+      addStyleControl(middleArea, type, 'customChoice');
     }
 
     // Every type, built-in or not, can have buttons added. They are stored
@@ -31682,7 +32153,7 @@ function renderEquipmentTypeList(){
     });
     // No "+ Quick buttons" bubble on a row with none (Tyrus, Oct 2): they're
     // set up in the Add equipment window. A row that has some keeps "Edit buttons".
-    if(extraCount) middleArea.appendChild(setupBtn);
+    if(extraCount) pickArea.appendChild(setupBtn);
 
     const existingItem = currentEquipmentItems.find(i => i.type === type);
 
@@ -31701,31 +32172,6 @@ function renderEquipmentTypeList(){
       row.appendChild(slot);
     }
 
-    const quickTextInput = document.createElement('input');
-    quickTextInput.type = 'text';
-    quickTextInput.className = 'equip-quick-text';
-    quickTextInput.placeholder = 'Type';
-    quickTextInput.value = existingItem ? (existingItem.quickText || '') : '';
-    quickTextInput.style.width = '155px';
-    quickTextInput.style.flexShrink = '0';
-    quickTextInput.style.fontSize = '13px';
-    quickTextInput.style.padding = '7px 10px';
-    quickTextInput.addEventListener('click', (e)=> e.stopPropagation());
-    quickTextInput.addEventListener('change', ()=>{
-      const it = ensureEquipmentItem(type);
-      it.quickText = quickTextInput.value;
-      persistCurrentEquipmentItems();
-    });
-    quickTextInput.addEventListener('keydown', (e)=>{
-      if(e.key !== 'Enter') return;
-      e.preventDefault();
-      const inputs = Array.from(document.querySelectorAll('#icEquipmentList .equip-quick-text'));
-      const idx = inputs.indexOf(quickTextInput);
-      quickTextInput.blur();
-      const next = inputs[idx + 1];
-      if(next) next.focus();
-    });
-    row.appendChild(quickTextInput);
 
     const notesBtn = document.createElement('button');
     notesBtn.type = 'button';
@@ -35538,22 +35984,7 @@ document.getElementById('settingPushToTalk').checked = appSettings.pushToTalkEna
 renderMicSideButtons();
 document.getElementById('settingShowDosageSuggestions').checked = appSettings.showDosageSuggestions;
 document.getElementById('settingWaterBalance').checked = appSettings.showWaterBalance === true;
-document.getElementById('settingRecentReadings').checked = appSettings.showRecentReadings !== false;
-document.getElementById('settingRecentDosages').checked = appSettings.showRecentDosages !== false;
-document.getElementById('settingRecentDosages').addEventListener('change', (e)=>{
-  appSettings.showRecentDosages = e.target.checked;
-  saveSettings();
-  showToast(appSettings.showRecentDosages ? 'Chemicals added shown in the readings history' : 'Chemicals added hidden');
-});
-document.getElementById('settingRecentReadings').addEventListener('change', (e)=>{
-  appSettings.showRecentReadings = e.target.checked;
-  // Chemicals added follows it, on or off (Oct 2)
-  appSettings.showRecentDosages = e.target.checked;
-  const doses = document.getElementById('settingRecentDosages');
-  if(doses) doses.checked = e.target.checked;
-  saveSettings();
-  showToast(appSettings.showRecentReadings ? 'Service history table shown on visits' : 'Service history table hidden on visits');
-});
+// The service history table switch lives in the app only (Nov 3)
 document.getElementById('settingAutoNotifyAll').checked = appSettings.autoNotifyAll === true;
 document.getElementById('settingAutoNotifyLead').value = String(appSettings.autoNotifyAllLead || 2);
 document.getElementById('settingAutoNotifyLeadField').style.display =
@@ -36525,6 +36956,139 @@ document.getElementById('btnChangePassword').addEventListener('click', changeOwn
       if(orig) return orig.apply(this, arguments);
     };
   }catch(e){}
+})();
+</script>
+<script>
+const EMAIL_LOGO_BUILDERS = ["previewReportEmail", "buildServiceReportEmailHtml", "quoteEmailHtml", "qoJobEmailHtml"];
+// ---- Your logo in the emails (Nov 5) ----
+// The logo and where it sits are kept with the report email style, so both
+// the website and the phones read the same. Every emailed header is passed
+// through emailApplyLogo; on the way out, the picture becomes an attachment
+// the email refers to by id (mail apps block pictures embedded as text).
+function emailLogoSettings(){
+  const s = lsGet('reportEmailStyle') || {};
+  return {logo: typeof s.logo === 'string' && s.logo.indexOf('data:image/') === 0 ? s.logo : '',
+          pos: ['beside', 'above', 'badge'].indexOf(s.logoPos) !== -1 ? s.logoPos : 'beside'};
+}
+function emailApplyLogo(html){
+  html = String(html || '');
+  const L = emailLogoSettings();
+  if(!L.logo || html.indexOf('data-weir-logo') !== -1) return html;
+  const re = /<tr><td style="background:(#[0-9A-Fa-f]{3,6});padding:22px 26px;">([\s\S]*?)<\/td><\/tr>/;
+  const m = html.match(re);
+  if(!m) return html;
+  const colour = m[1], inner = m[2];
+  const img = (h, extra)=> '<img data-weir-logo="1" src="' + L.logo + '" height="' + h + '" alt="" '
+    + 'style="display:block;border:0;height:' + h + 'px;width:auto;max-width:240px;' + extra + '">';
+  let out;
+  if(L.pos === 'above'){
+    out = '<tr><td style="background:#FFFFFF;padding:22px 26px 16px;text-align:center;border-bottom:1px solid #E6E9E8;">'
+      + '<img data-weir-logo="1" src="' + L.logo + '" height="96" alt="" style="display:inline-block;border:0;height:96px;width:auto;max-width:240px;"></td></tr>'
+      + '<tr><td style="background:' + colour + ';padding:16px 26px;text-align:center;">' + inner + '</td></tr>';
+  } else if(L.pos === 'badge'){
+    out = '<tr><td style="background:' + colour + ';padding:20px 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+      + '<td style="vertical-align:middle;">' + inner + '</td>'
+      + '<td align="right" style="vertical-align:middle;padding-left:14px;">'
+      + '<table role="presentation" align="right" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#FFFFFF;border-radius:12px;padding:5px;">' + img(54, 'border-radius:8px;') + '</td></tr></table></td></tr></table></td></tr>';
+  } else {
+    out = '<tr><td style="background:' + colour + ';padding:18px 26px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+      + '<td style="padding-right:14px;vertical-align:middle;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#FFFFFF;border-radius:10px;padding:4px;">' + img(48, 'border-radius:7px;') + '</td></tr></table></td>'
+      + '<td style="vertical-align:middle;">' + inner + '</td></tr></table></td></tr>';
+  }
+  return html.replace(re, function(){ return out; });
+}
+(function emailLogoHooks(){
+  try{
+    // Every email builder that has the coloured header
+    EMAIL_LOGO_BUILDERS.forEach(function(name){
+      const f = window[name];
+      if(typeof f !== 'function') return;
+      window[name] = function(){ return emailApplyLogo(f.apply(this, arguments)); };
+    });
+    // On its way to the sender: the picture goes along as an attachment
+    const realFetch = window.fetch;
+    window.fetch = function(url, opts){
+      try{
+        if(typeof url === 'string' && url.indexOf('/functions/v1/send-report') !== -1
+           && opts && typeof opts.body === 'string' && opts.body.indexOf('data-weir-logo') !== -1){
+          const b = JSON.parse(opts.body);
+          const m = typeof b.html === 'string'
+            ? b.html.match(/<img data-weir-logo="1" src="data:(image\/[a-z]+);base64,([^"]+)"/) : null;
+          if(m){
+            b.logo = m[2]; b.logoType = m[1];
+            b.html = b.html.replace(/(<img data-weir-logo="1" src=")data:[^"]*"/g, '$1cid:logo"');
+            opts = Object.assign({}, opts, {body: JSON.stringify(b)});
+          }
+        }
+      }catch(e){}
+      return realFetch.call(this, url, opts);
+    };
+  }catch(e){}
+})();
+// ---- Logo upload on the Account page's Email tab (Nov 5) ----
+(function logoSetting(){
+  const file = document.getElementById('acctLogoFile');
+  if(!file) return;
+  const thumb = document.getElementById('acctLogoThumb');
+  const pick = document.getElementById('acctLogoPick');
+  const drop = document.getElementById('acctLogoRemove');
+  const where = document.getElementById('acctLogoWhere');
+  const refresh = ()=>{
+    const L = emailLogoSettings();
+    thumb.innerHTML = L.logo ? '<img src="' + L.logo + '" style="max-width:72px;max-height:72px;">'
+      : '<span style="font-size:11.5px;color:var(--muted);text-align:center;">No logo</span>';
+    drop.style.display = L.logo ? '' : 'none';
+    pick.textContent = L.logo ? 'Change logo' : 'Upload logo';
+    where.style.display = L.logo ? 'flex' : 'none';
+    where.querySelectorAll('input[name="acctLogoPos"]').forEach(r=>{
+      r.checked = r.value === L.pos;
+      r.parentNode.style.borderColor = r.checked ? 'var(--teal-deep)' : 'var(--line)';
+    });
+  };
+  const save = (patch)=>{ const s = loadEmailStyle(); Object.assign(s, patch); saveEmailStyle(s); refresh(); };
+  pick.addEventListener('click', ()=> file.click());
+  drop.addEventListener('click', ()=>{ save({logo: ''}); showToast('Logo removed'); });
+  where.querySelectorAll('input[name="acctLogoPos"]').forEach(r=>{
+    r.addEventListener('change', ()=>{ if(r.checked){ save({logoPos: r.value}); showToast('Saved'); } });
+  });
+  file.addEventListener('change', ()=>{
+    const f = file.files && file.files[0];
+    file.value = '';
+    if(!f) return;
+    if(!/^image\//.test(f.type) || /svg/.test(f.type)){ showToast('Use a PNG or JPG picture'); return; }
+    if(f.size > 8 * 1024 * 1024){ showToast('That picture is too big. Try one under 8 MB'); return; }
+    const rd = new FileReader();
+    rd.onload = ()=>{
+      const im = new Image();
+      im.onload = ()=>{
+        // Shrunk so it travels light: no bigger than 240 across or 240 tall
+        const k = Math.min(1, 240 / Math.max(im.width, im.height));
+        const w = Math.max(1, Math.round(im.width * k)), h = Math.max(1, Math.round(im.height * k));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const x = c.getContext('2d');
+        let out = '';
+        try{
+          x.drawImage(im, 0, 0, w, h);
+          out = c.toDataURL('image/png');
+          if(out.length > 120000){          // a photo rather than a graphic: JPEG on white
+            x.globalCompositeOperation = 'destination-over';
+            x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, w, h);
+            out = c.toDataURL('image/jpeg', 0.85);
+          }
+        }catch(e){ out = ''; }
+        if(!out || out.length > 250000){ showToast('Could not use that picture. Try a smaller one'); return; }
+        save({logo: out});
+        showToast('Logo saved');
+      };
+      im.onerror = ()=> showToast('Could not read that picture');
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  });
+  const baseRender = window.renderAccountEmail;
+  window.renderAccountEmail = function(){ const r = baseRender.apply(this, arguments); refresh(); return r; };
+  refresh();
 })();
 </script>
 
